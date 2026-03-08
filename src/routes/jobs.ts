@@ -1,3 +1,4 @@
+// ジョブの作成・更新・起動停止・一覧取得を扱うジョブ管理APIルーター。
 import { JobStatus, Prisma } from '@prisma/client';
 import { Router } from 'express';
 import { z } from 'zod';
@@ -59,12 +60,14 @@ const updateJobSchema = createJobSchema.partial().refine(
   'request body must include at least one updatable field'
 );
 
+// 互換用の固定時刻（00:00:00 UTC）を返す。
 function fixedScheduleTime(): Date {
   const d = new Date(0);
   d.setUTCHours(0, 0, 0, 0);
   return d;
 }
 
+// URLパラメータのジョブIDをバリデーションして`bigint`化する。
 function parseJobId(idParam: string): bigint {
   if (!/^\d+$/.test(idParam)) {
     throw new z.ZodError([
@@ -79,16 +82,19 @@ function parseJobId(idParam: string): bigint {
   return BigInt(idParam);
 }
 
+// ジョブIDからVNC公開ポートを算出する。
 function calcVncPort(jobId: bigint): number {
   return vncBasePort + Number(jobId % BigInt(vncPortSpan));
 }
 
+// noVNC接続用URLを生成する。
 function buildNoVncUrl(jobId: bigint): string {
   const token = `job-${Number(jobId)}`;
   const path = encodeURIComponent(`websockify?token=${token}`);
   return `${novncPublicBaseUrl}/vnc.html?autoconnect=1&resize=scale&path=${path}`;
 }
 
+// DBレコード形式のジョブ情報をAPIレスポンス形式へ変換する。
 function mapJob(job: {
   id: bigint;
   name: string;
@@ -157,14 +163,17 @@ function mapJob(job: {
   };
 }
 
+// Prismaのレコード未検出エラーかどうかを判定する。
 function isPrismaNotFound(err: unknown): boolean {
   return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025';
 }
 
+// Prismaの一意制約違反エラーかどうかを判定する。
 function isPrismaUniqueViolation(err: unknown): boolean {
   return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
 }
 
+// ワーカー層から返るジョブ未検出エラーかどうかを判定する。
 function isJobNotFound(err: unknown): boolean {
   return err instanceof Error && err.message === 'job not found';
 }

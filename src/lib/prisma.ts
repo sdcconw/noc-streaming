@@ -1,3 +1,4 @@
+// Prismaクライアントをシングルトンで初期化・再利用するモジュール。
 import { PrismaClient } from '@prisma/client';
 
 const globalForPrisma = globalThis as unknown as {

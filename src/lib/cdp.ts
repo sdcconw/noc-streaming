@@ -1,3 +1,4 @@
+// Chrome DevTools Protocol との通信を行う最小クライアント実装。
 import WebSocket from 'ws';
 import type { RawData } from 'ws';
 
@@ -28,6 +29,7 @@ export class CdpClient {
     });
   }
 
+  // 指定ポートのCDPエンドポイントへ接続し、必要ドメインを有効化する。
   static async connect(debugPort: number): Promise<CdpClient> {
     const wsUrl = await resolveWsUrl(debugPort);
     const ws = await new Promise<WebSocket>((resolve, reject) => {
@@ -43,6 +45,7 @@ export class CdpClient {
     return c;
   }
 
+  // WebSocket接続をクローズする。
   async close() {
     await new Promise<void>((resolve) => {
       this.ws.once('close', () => resolve());
@@ -50,10 +53,12 @@ export class CdpClient {
     });
   }
 
+  // ブラウザタブを指定URLへ遷移させる。
   async navigate(url: string) {
     await this.send('Page.navigate', { url });
   }
 
+  // キャプチャ用のビューポートサイズを設定する。
   async setViewport(width: number, height: number) {
     await this.send('Emulation.setDeviceMetricsOverride', {
       width,
@@ -63,6 +68,7 @@ export class CdpClient {
     });
   }
 
+  // 余白とカーソルを抑止するキャプチャ用CSSを適用する。
   async applyCaptureStyle() {
     const script = `
 (() => {
@@ -104,20 +110,24 @@ export class CdpClient {
     await this.send('Runtime.evaluate', { expression: script });
   }
 
+  // ブラウザページをキャッシュ無視で再読込する。
   async reload() {
     await this.send('Page.reload', { ignoreCache: true });
   }
 
+  // ログイン維持用途のCookieをブラウザへ注入する。
   async setCookies(cookies: unknown[]) {
     if (!cookies.length) return;
     await this.send('Network.setCookies', { cookies });
   }
 
+  // 現在のブラウザCookie一覧を取得する。
   async getCookies(): Promise<unknown[]> {
     const result = (await this.send('Network.getAllCookies')) as { cookies?: unknown[] };
     return result.cookies ?? [];
   }
 
+  // 汎用CDPコマンドを送信して応答を待つ。
   private async send(method: string, params?: Record<string, unknown>): Promise<unknown> {
     const id = ++this.seq;
     const payload = JSON.stringify({ id, method, params });
@@ -134,6 +144,7 @@ export class CdpClient {
   }
 }
 
+// CDPのWebSocket URLを`/json/list`→`/json/version`の順で解決する。
 async function resolveWsUrl(port: number): Promise<string> {
   const listRes = await fetch(`http://127.0.0.1:${port}/json/list`);
   if (listRes.ok) {

@@ -1,7 +1,9 @@
+// 監査ログの記録処理を集約するユーティリティ。
 import type { Request, Response } from 'express';
 
 import { prisma } from './prisma.js';
 
+// リクエスト起点の監査イベントを共通形式でDBへ記録する。
 export async function writeAudit(
   req: Request,
   res: Response,

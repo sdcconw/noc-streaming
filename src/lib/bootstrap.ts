@@ -1,20 +1,24 @@
+// 環境変数から初期ユーザー・LDAP設定・ジョブ状態を投入する起動時処理。
 import bcrypt from 'bcryptjs';
 import { JobStatus } from '@prisma/client';
 
 import { prisma } from './prisma.js';
 import { encryptSecret } from './secrets.js';
 
+// 環境変数の真偽値表現をbooleanへ正規化する。
 function toBool(v: string | undefined, defaultValue = false): boolean {
   if (!v) return defaultValue;
   return ['1', 'true', 'yes', 'on'].includes(v.toLowerCase());
 }
 
+// 起動時ブートストラップ処理を順番に実行する。
 export async function bootstrapFromEnv() {
   await bootstrapAdminUser();
   await bootstrapLdapConfig();
   await bootstrapJobRuntimeStatus();
 }
 
+// 管理者ユーザーの初期作成または更新を実行する。
 async function bootstrapAdminUser() {
   const username = (process.env.ADMIN_USERNAME ?? 'admin').trim();
   const password = process.env.ADMIN_PASSWORD ?? 'password';
@@ -51,6 +55,7 @@ async function bootstrapAdminUser() {
   console.log(`bootstrap admin ready: ${username}`);
 }
 
+// LDAP初期設定の作成または更新を実行する。
 async function bootstrapLdapConfig() {
   const enabled = toBool(process.env.LDAP_BOOTSTRAP_ENABLED, false);
   if (!enabled) return;
@@ -101,6 +106,7 @@ async function bootstrapLdapConfig() {
   console.log(`bootstrap ldap config ready: ${serverUrl}`);
 }
 
+// 異常終了で残った実行中ステータスを起動時に停止状態へ戻す。
 async function bootstrapJobRuntimeStatus() {
   const updated = await prisma.job.updateMany({
     where: {

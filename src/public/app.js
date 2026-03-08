@@ -1,3 +1,4 @@
+// WebUI共通の画面制御（認証状態、メニュー、API連携）を担当するスクリプト。
 const page = document.body.dataset.page || 'jobs';
 const adminPages = new Set(['users', 'ldap', 'audit']);
 let currentUser = null;
@@ -9,6 +10,7 @@ const alertBox = document.getElementById('alertBox');
 const sidebarLinks = Array.from(document.querySelectorAll('#sidebarNav .nav-link, #sidebarMobileNav .nav-link'));
 const adminOnlyLinks = Array.from(document.querySelectorAll('.admin-only'));
 
+// テーマ属性を切り替えてローカル保存する。
 function setTheme(theme) {
   document.documentElement.setAttribute('data-bs-theme', theme);
   localStorage.setItem('theme', theme);
@@ -23,6 +25,7 @@ themeToggleBtn?.addEventListener('click', () => {
   setTheme(current === 'dark' ? 'light' : 'dark');
 });
 
+// ページ上部アラートを表示する。
 function showAlert(type, message) {
   if (!alertBox) return;
   alertBox.className = `alert alert-${type}`;
@@ -30,11 +33,13 @@ function showAlert(type, message) {
   alertBox.classList.remove('d-none');
 }
 
+// ページ上部アラートを非表示にする。
 function hideAlert() {
   if (!alertBox) return;
   alertBox.classList.add('d-none');
 }
 
+// 指定Cookieキーの値を取得する。
 function getCookieValue(name) {
   const cookies = document.cookie ? document.cookie.split('; ') : [];
   for (const entry of cookies) {
@@ -46,6 +51,7 @@ function getCookieValue(name) {
   return '';
 }
 
+// API呼び出し共通処理（CSRF付与・エラーハンドリング）を行う。
 async function api(path, options = {}) {
   const method = String(options.method || 'GET').toUpperCase();
   const headers = {
@@ -85,6 +91,7 @@ logoutBtn?.addEventListener('click', async () => {
   location.href = '/ui/login.html';
 });
 
+// ジョブ状態に応じたバッジHTMLを返す。
 function statusBadge(status) {
   const map = {
     STOPPED: 'secondary',
@@ -98,6 +105,7 @@ function statusBadge(status) {
   return `<span class="badge text-bg-${cls} badge-status">${status}</span>`;
 }
 
+// 権限とジョブ状態に応じた操作ボタン群を生成する。
 function actionButtons(job) {
   const role = currentUser?.role || 'viewer';
   const canControl = ['admin', 'operator'].includes(role);
@@ -116,6 +124,7 @@ function actionButtons(job) {
   `;
 }
 
+// セッション取得と画面権限制御の初期化を行う。
 async function initializeSession() {
   const res = await fetch('/api/auth/me');
   if (res.status === 401) {
@@ -144,6 +153,7 @@ async function initializeSession() {
   }
 }
 
+// 改行テキストのURLスケジュールをAPI形式へ変換する。
 function parseSchedules(raw) {
   return raw
     .split('\n')
@@ -159,12 +169,14 @@ function parseSchedules(raw) {
     });
 }
 
+// API形式のURLスケジュールをテキスト表示形式へ変換する。
 function formatSchedules(urls) {
   return (urls || [])
     .map((x) => `${x.url},${x.priority},${x.refresh_interval_sec}`)
     .join('\n');
 }
 
+// 文字列をHTMLエスケープする。
 function escapeHtml(value) {
   return String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -174,6 +186,7 @@ function escapeHtml(value) {
     .replaceAll("'", '&#39;');
 }
 
+// ジョブ管理画面の初期化とイベント登録を行う。
 async function initJobsPage() {
   const jobsBody = document.getElementById('jobsBody');
   const refreshBtn = document.getElementById('refreshBtn');
@@ -191,6 +204,7 @@ async function initJobsPage() {
   let expandedLogJobId = null;
   const logsCache = new Map();
 
+  // ジョブ一覧テーブル（ログ展開行を含む）を再描画する。
   function renderJobs() {
     jobsBody.innerHTML = jobs
       .map((job) => {
@@ -229,6 +243,7 @@ async function initJobsPage() {
       .join('');
   }
 
+  // ジョブ一覧をAPIから再取得して再描画する。
   async function loadJobs() {
     jobs = await api('/api/jobs');
     if (expandedLogJobId !== null && !jobs.some((x) => x.id === expandedLogJobId)) {
@@ -433,6 +448,7 @@ async function initUsersPage() {
   const reloadUsersBtn = document.getElementById('reloadUsersBtn');
   if (!usersBody) return;
 
+  // ユーザー一覧を取得してテーブルへ反映する。
   async function loadUsers() {
     const users = await api('/api/admin/users');
     usersBody.innerHTML = users
@@ -516,6 +532,7 @@ async function initLdapPage() {
   const ldapTestBtn = document.getElementById('ldapTestBtn');
   if (!ldapForm) return;
 
+  // フォーム入力からLDAP設定ペイロードを組み立てる。
   function buildLdapPayload() {
     return {
       enabled: Boolean(ldapForm.enabled.checked),
@@ -528,6 +545,7 @@ async function initLdapPage() {
     };
   }
 
+  // 保存済みLDAP設定を取得してフォームへ展開する。
   async function loadLdapConfig() {
     const data = await api('/api/admin/ldap-config');
     if (!data) return;
@@ -583,6 +601,7 @@ async function initAuditPage() {
   const auditLimit = document.getElementById('auditLimit');
   if (!auditBody) return;
 
+  // 監査ログを取得してテーブルへ反映する。
   async function loadAuditLogs() {
     hideAlert();
     const limit = Number(auditLimit?.value || '200');

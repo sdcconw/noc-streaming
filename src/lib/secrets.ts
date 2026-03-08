@@ -1,13 +1,16 @@
+// 機密情報をAES-GCMで暗号化・復号するヘルパー関数群。
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 
 const ENC_PREFIX = 'enc:v1:';
 const ENC_ALGO = 'aes-256-gcm';
 
+// 環境変数の秘密鍵文字列から暗号化に使う固定長キーを生成する。
 function getKey(): Buffer {
   const raw = process.env.SECRET_ENCRYPTION_KEY ?? 'dev-secret-encryption-key-change-me';
   return createHash('sha256').update(raw).digest();
 }
 
+// 平文を暗号化し、保存用のプレフィックス付き文字列へ変換する。
 export function encryptSecret(plainText: string): string {
   if (!plainText) return '';
   if (plainText.startsWith(ENC_PREFIX)) return plainText;
@@ -20,6 +23,7 @@ export function encryptSecret(plainText: string): string {
   return `${ENC_PREFIX}${iv.toString('base64')}:${tag.toString('base64')}:${encrypted.toString('base64')}`;
 }
 
+// 保存済み文字列を復号して平文へ戻す（未暗号化値はそのまま返す）。
 export function decryptSecret(value: string): string {
   if (!value) return '';
   if (!value.startsWith(ENC_PREFIX)) return value;

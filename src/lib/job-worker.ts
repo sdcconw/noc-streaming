@@ -1,3 +1,4 @@
+// ブラウザ描画・VNC・FFmpegを制御して配信ジョブを実行するワーカー本体。
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import { execFile } from 'node:child_process';
@@ -58,12 +59,14 @@ const URL_SWITCH_TIMEOUT_MS = 10_000;
 class JobWorkerService {
   private runtimes = new Map<bigint, JobRuntime>();
 
+  // 全ジョブのヘルス監視ループを開始する。
   public startMonitor() {
     setInterval(() => {
       void this.monitorHealth();
     }, monitorIntervalMs);
   }
 
+  // 指定ジョブの配信パイプラインを起動する。
   public async start(jobId: bigint): Promise<void> {
     const runtime = await this.getOrCreateRuntime(jobId);
     await this.withLock(runtime, async () => {
@@ -93,6 +96,7 @@ class JobWorkerService {
     });
   }
 
+  // 指定ジョブの配信パイプラインを停止する。
   public async stop(jobId: bigint): Promise<void> {
     const runtime = await this.getOrCreateRuntime(jobId);
     await this.withLock(runtime, async () => {
@@ -110,11 +114,13 @@ class JobWorkerService {
     });
   }
 
+  // 指定ジョブを停止後に再起動する。
   public async restart(jobId: bigint): Promise<void> {
     await this.stop(jobId);
     await this.start(jobId);
   }
 
+  // 指定ジョブのイベントログを取得する。
   public async getLogs(jobId: bigint, limit = 200) {
     return prisma.jobEvent.findMany({
       where: { jobId },
@@ -123,6 +129,7 @@ class JobWorkerService {
     });
   }
 
+  // 実行中ジョブのプロセス状態を監視し異常時に復旧処理へ移行する。
   private async monitorHealth() {
     for (const [jobId, runtime] of this.runtimes) {
       if (runtime.stopping) continue;
@@ -150,6 +157,7 @@ class JobWorkerService {
     }
   }
 
+  // ジョブ障害発生時の再接続リトライ制御を行う。
   private async handleFailure(runtime: JobRuntime, reason: string) {
     if (runtime.stopping) return;
 
@@ -195,6 +203,7 @@ class JobWorkerService {
     }, waitMs);
   }
 
+  // ソース起動からFFmpeg出力開始までの配信パイプラインを構築する。
   private async startPipeline(runtime: JobRuntime, job: JobWithUrls) {
     runtime.currentInputSourceType = job.inputSourceType;
     runtime.captureWidth = job.resolutionWidth;
@@ -353,6 +362,7 @@ class JobWorkerService {
     }
   }
 
+  // ジョブ関連プロセスとタイマーを停止・後始末する。
   private async stopProcesses(runtime: JobRuntime, forceOnly: boolean) {
     this.clearTimers(runtime);
 
@@ -392,11 +402,13 @@ class JobWorkerService {
     }
   }
 
+  // URL更新タイマーを初期化して起動する。
   private startTimers(runtime: JobRuntime, jobId: bigint, refreshIntervalSec: number) {
     this.clearTimers(runtime);
     this.setRefreshTimer(runtime, jobId, refreshIntervalSec);
   }
 
+  // 指定秒間隔でURL更新タイマーを設定する。
   private setRefreshTimer(runtime: JobRuntime, jobId: bigint, refreshIntervalSec: number) {
     if (runtime.refreshTimer) {
       clearInterval(runtime.refreshTimer);
@@ -409,6 +421,7 @@ class JobWorkerService {
     }, sec * 1000);
   }
 
+  // URL更新タイマーと再接続タイマーを解除する。
   private clearTimers(runtime: JobRuntime) {
     if (runtime.refreshTimer) clearInterval(runtime.refreshTimer);
     if (runtime.reconnectTimer) clearTimeout(runtime.reconnectTimer);
@@ -416,6 +429,7 @@ class JobWorkerService {
     runtime.reconnectTimer = undefined;
   }
 
+  // タイマー起点でURL切替または再読込処理を実行する。
   private async runRefreshTick(runtime: JobRuntime, jobId: bigint) {
     const job = await this.loadJob(jobId);
     if (!job || runtime.stopping) return;
@@ -468,6 +482,7 @@ class JobWorkerService {
     }
   }
 
+  // URL切替をリトライ付きで実行する。
   private async switchUrlWithRetry(runtime: JobRuntime, url: string): Promise<boolean> {
     for (let i = 0; i < 3; i += 1) {
       try {
@@ -486,6 +501,7 @@ class JobWorkerService {
     return false;
   }
 
+  // 現在表示中ページをCDP経由で再読込する。
   private async reloadPage(runtime: JobRuntime): Promise<boolean> {
     const proc = runtime.processes.chromium;
     if (!proc || proc.killed || proc.exitCode !== null || !runtime.cdp) {
@@ -500,6 +516,7 @@ class JobWorkerService {
     }
   }
 
+  // Chromiumを再起動して指定URLへ復帰させる。
   private async restartChromium(runtime: JobRuntime, url: string) {
     if (runtime.mode !== 'real') return;
 
@@ -547,12 +564,14 @@ class JobWorkerService {
     await this.applyBrowserLayout(runtime);
   }
 
+  // 優先度順で先頭のURLエントリを取得する。
   private resolvePrimaryUrl(job: JobWithUrls): JobUrl | undefined {
     if (!job.urls.length) return undefined;
     const sorted = this.resolveUrlsOrdered(job);
     return sorted[0];
   }
 
+  // URLリストを優先度・ID順で安定ソートする。
   private resolveUrlsOrdered(job: JobWithUrls): JobUrl[] {
     return [...job.urls].sort((a, b) => {
       if (a.priority !== b.priority) return a.priority - b.priority;
@@ -562,6 +581,7 @@ class JobWorkerService {
     });
   }
 
+  // プロトコル別にFFmpeg出力先URLを組み立てる。
   private buildOutputTarget(job: Job): string {
     const base = job.outputUrl.trim();
     const streamKey = decryptSecret(job.streamKeyEnc);
@@ -578,6 +598,7 @@ class JobWorkerService {
     return `${base}${base.includes('?') ? '&' : '?'}${params.join('&')}`;
   }
 
+  // オーバーレイ有無を含む映像フィルター文字列を生成する。
   private buildVideoFilter(job: Job): string {
     const filters: string[] = ['format=yuv420p'];
     if (job.overlayEnabled) {
@@ -586,6 +607,7 @@ class JobWorkerService {
     return filters.join(',');
   }
 
+  // 時刻とメッセージのdrawtextフィルターを生成する。
   private buildDrawTextFilter(job: Job): string {
     const message = (job.overlayMessage ?? '').trim();
     const escapedMessage = message ? ` ${this.escapeDrawTextMessage(message)}` : '';
@@ -603,6 +625,7 @@ class JobWorkerService {
     return `drawtext=text='${text}':expansion=strftime:x=${pos.x}:y=${pos.y}:fontsize=${size}:fontcolor=white:box=1:boxcolor=black@0.55:boxborderw=8`;
   }
 
+  // drawtextで解釈される記号をエスケープする。
   private escapeDrawTextMessage(value: string): string {
     return value
       .replaceAll('\\', '\\\\')
@@ -612,6 +635,7 @@ class JobWorkerService {
       .replaceAll(',', '\\,');
   }
 
+  // 子プロセスを起動し、ログ収集と異常終了監視を紐づける。
   private spawnProcess(
     runtime: JobRuntime,
     source: keyof WorkerProc,
@@ -651,6 +675,7 @@ class JobWorkerService {
     return proc;
   }
 
+  // ジョブごとの実行時コンテキストを取得または新規作成する。
   private async getOrCreateRuntime(jobId: bigint): Promise<JobRuntime> {
     const existing = this.runtimes.get(jobId);
     if (existing) return existing;
@@ -672,6 +697,7 @@ class JobWorkerService {
     return runtime;
   }
 
+  // 実行時コンテキストが稼働中かどうかを判定する。
   private isRunning(runtime: JobRuntime): boolean {
     if (runtime.mode === 'mock') {
       return Boolean(runtime.refreshTimer);
@@ -683,6 +709,7 @@ class JobWorkerService {
     return Boolean(runtime.processes.ffmpeg);
   }
 
+  // ジョブ定義とURL一覧をDBから取得する。
   private async loadJob(jobId: bigint): Promise<JobWithUrls | null> {
     return prisma.job.findUnique({
       where: { id: jobId },
@@ -694,10 +721,12 @@ class JobWorkerService {
     });
   }
 
+  // ジョブ状態をDBへ反映する。
   private async updateStatus(jobId: bigint, status: JobStatus) {
     await prisma.job.update({ where: { id: jobId }, data: { status } });
   }
 
+  // ジョブイベントログをDBへ記録する。
   private async log(jobId: bigint, level: string, source: string, message: string) {
     const text = message.trim();
     if (!text) return;
@@ -712,6 +741,7 @@ class JobWorkerService {
     });
   }
 
+  // 同一ジョブの開始/停止操作を直列化する排他制御を行う。
   private async withLock(runtime: JobRuntime, fn: () => Promise<void>) {
     const previous = runtime.lock;
     let release: () => void = () => {};
@@ -727,10 +757,12 @@ class JobWorkerService {
     }
   }
 
+  // 指定ミリ秒待機する。
   private async sleep(ms: number) {
     await new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  // プロセスが一定時間生存していることを確認する。
   private async waitProcessHealthy(
     proc: ChildProcessWithoutNullStreams | undefined,
     timeoutMs: number,
@@ -753,6 +785,7 @@ class JobWorkerService {
     throw new Error(`${label} startup timeout`);
   }
 
+  // CDP接続可能になるまでリトライして待機する。
   private async waitForCdp(debugPort: number, timeoutMs: number): Promise<CdpClient> {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
@@ -765,12 +798,14 @@ class JobWorkerService {
     throw new Error('cdp connection timeout');
   }
 
+  // キャプチャ向けビューポートとスタイルをブラウザへ適用する。
   private async applyBrowserLayout(runtime: JobRuntime) {
     if (!runtime.cdp) return;
     await runtime.cdp.setViewport(runtime.captureWidth, runtime.captureHeight).catch(() => undefined);
     await runtime.cdp.applyCaptureStyle().catch(() => undefined);
   }
 
+  // 保存済みCookieをブラウザへ復元する。
   private async restoreCookies(runtime: JobRuntime) {
     if (!runtime.cdp) return;
     const state = await prisma.jobBrowserState.findUnique({ where: { jobId: runtime.jobId } });
@@ -779,6 +814,7 @@ class JobWorkerService {
     await runtime.cdp.setCookies(cookies);
   }
 
+  // 現在のCookieをDBへ永続化する。
   private async persistCookies(runtime: JobRuntime) {
     if (!runtime.cdp) return;
     const cookies = await runtime.cdp.getCookies();
@@ -789,6 +825,7 @@ class JobWorkerService {
     });
   }
 
+  // FFmpegのCPU/RSS/ビットレート情報を定期記録する。
   private async collectRuntimeMetrics(runtime: JobRuntime) {
     if (!runtime.processes.ffmpeg?.pid) return;
     const now = Date.now();
@@ -816,6 +853,7 @@ class JobWorkerService {
     }
   }
 
+  // タイムアウト付きでブラウザ遷移を実行する。
   private async navigateWithTimeout(runtime: JobRuntime, url: string, timeoutMs: number) {
     if (!runtime.cdp) throw new Error('cdp unavailable');
 

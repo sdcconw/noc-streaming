@@ -1,8 +1,10 @@
+// JWTとセッション情報を使った認可・認証ヘルパーを提供する共通モジュール。
 import jwt from 'jsonwebtoken';
 import type { NextFunction, Request, Response } from 'express';
 
 import { prisma } from './prisma.js';
 
+// JWT署名検証に必要なシークレットを環境変数から取得する。
 function requireJwtSecret(): string {
   const value = process.env.JWT_SECRET;
   if (!value) {
@@ -14,6 +16,7 @@ const JWT_SECRET = requireJwtSecret();
 export type AuthRole = 'admin' | 'operator' | 'viewer';
 const ACCESS_TOKEN_COOKIE = 'noc_access_token';
 
+// AuthorizationヘッダーからBearerトークン文字列を抽出する。
 function parseBearerToken(rawHeader: string | undefined): string {
   if (!rawHeader) {
     throw new Error('authorization header is required');
@@ -27,6 +30,7 @@ function parseBearerToken(rawHeader: string | undefined): string {
   return token;
 }
 
+// Cookieヘッダーから指定キーの値を取得する。
 function parseCookieValue(rawCookie: string | undefined, key: string): string | null {
   if (!rawCookie) return null;
   const parts = rawCookie.split(';');
@@ -39,6 +43,7 @@ function parseCookieValue(rawCookie: string | undefined, key: string): string | 
   return null;
 }
 
+// AuthorizationヘッダーまたはCookieからアクセストークンを解決する。
 function resolveToken(req: Request): string {
   const rawHeader = req.header('authorization');
   if (rawHeader) {
@@ -51,6 +56,7 @@ function resolveToken(req: Request): string {
   return tokenFromCookie;
 }
 
+// トークン検証とDBセッション照合を行い、認証コンテキストを返す。
 export async function loadSessionContext(req: Request) {
   const token = resolveToken(req);
   const payload = jwt.verify(token, JWT_SECRET) as {
@@ -81,6 +87,7 @@ export async function loadSessionContext(req: Request) {
   return { session, user: session.user };
 }
 
+// 未認証アクセスを401で遮断し、認証ユーザー情報を`res.locals`に格納する。
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   try {
     const ctx = await loadSessionContext(req);
@@ -95,6 +102,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   }
 }
 
+// 指定ロール以外のアクセスを403で遮断する認可ミドルウェアを生成する。
 export function requireRole(roles: AuthRole[]) {
   return (req: Request, res: Response, next: NextFunction) => {
     const authUser = res.locals.authUser as { role?: AuthRole } | undefined;

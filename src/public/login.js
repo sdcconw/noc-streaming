@@ -1,6 +1,8 @@
+// ログイン画面の送信処理とエラーメッセージ表示を行うスクリプト。
 const form = document.getElementById('loginForm');
 const loginError = document.getElementById('loginError');
 
+// ログインフォーム送信時に認証APIを呼び出し、成功時はジョブ画面へ遷移する。
 form?.addEventListener('submit', async (event) => {
   event.preventDefault();
   loginError?.classList.add('d-none');

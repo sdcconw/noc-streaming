@@ -1,3 +1,4 @@
+// LDAP認証と接続確認を扱う共通モジュール。
 import { Client } from 'ldapts';
 
 import { prisma } from './prisma.js';
@@ -10,6 +11,7 @@ type LdapTestConfig = {
   baseDn: string;
 };
 
+// LDAPユーザー検索と再バインドで認証可否を判定する。
 export async function authenticateWithLdap(username: string, password: string): Promise<boolean> {
   if (!username || !password) return false;
 
@@ -49,6 +51,7 @@ export async function authenticateWithLdap(username: string, password: string): 
   }
 }
 
+// 管理画面の接続確認用にBindと検索の疎通をテストする。
 export async function testLdapConnection(config: LdapTestConfig): Promise<{ ok: boolean; message: string }> {
   const client = new Client({ url: config.serverUrl });
   try {
@@ -67,6 +70,7 @@ export async function testLdapConnection(config: LdapTestConfig): Promise<{ ok: 
   }
 }
 
+// LDAPフィルターへ埋め込む値を安全なエスケープ形式に変換する。
 function escapeLdapValue(value: string): string {
   return value
     .replaceAll('\\', '\\5c')

@@ -1,3 +1,4 @@
+// ログイン・ログアウト・セッション確認など認証系APIを提供するルーター。
 import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -14,6 +15,8 @@ const TOKEN_TTL_SECONDS = Number(process.env.AUTH_TOKEN_TTL_SECONDS ?? 3600);
 const ACCESS_TOKEN_COOKIE = 'noc_access_token';
 const CSRF_COOKIE = 'noc_csrf';
 const COOKIE_SECURE = (process.env.COOKIE_SECURE ?? 'false').toLowerCase() === 'true';
+
+// JWT署名に使う必須シークレットを取得する。
 function requireJwtSecret(): string {
   const value = process.env.JWT_SECRET;
   if (!value) {

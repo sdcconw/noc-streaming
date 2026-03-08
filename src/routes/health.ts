@@ -1,3 +1,4 @@
+// 監視用のヘルスチェックエンドポイントを提供するルーター。
 import { Router } from 'express';
 
 const healthRouter = Router();

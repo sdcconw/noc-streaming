@@ -1,3 +1,4 @@
+// ユーザー管理・LDAP設定・監査ログなど管理者向けAPIを提供するルーター。
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
@@ -11,6 +12,7 @@ import { decryptSecret, encryptSecret } from '../lib/secrets.js';
 const adminRouter = Router();
 adminRouter.use('/api/admin', requireAuth, requireRole(['admin']));
 
+// 入力値がLDAP/LDAPSスキームかどうかを判定する。
 function isLdapUrl(value: string): boolean {
   try {
     const u = new URL(value);
@@ -50,6 +52,7 @@ const updateUserSchema = z
   })
   .refine((v) => Object.keys(v).length > 0, 'request body must include at least one updatable field');
 
+// URLパラメータIDを`bigint`に変換する。
 function parseId(raw: string): bigint {
   if (!/^\d+$/.test(raw)) throw new Error('invalid id');
   return BigInt(raw);

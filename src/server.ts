@@ -1,3 +1,4 @@
+// アプリ全体の初期化、ミドルウェア設定、ルーティングを定義するエントリーポイント。
 import express from 'express';
 import fs from 'node:fs';
 import helmet from 'helmet';
@@ -41,6 +42,7 @@ app.use(
   })
 );
 
+// Cookieヘッダーから指定キーの値を取得する。
 function parseCookieValue(rawCookie: string | undefined, key: string): string | null {
   if (!rawCookie) return null;
   for (const part of rawCookie.split(';')) {
@@ -99,6 +101,7 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
   res.status(500).json({ message: 'internal server error' });
 });
 
+// 起動時処理を実行してHTTPサーバーを開始する。
 async function main() {
   await bootstrapFromEnv();
 
