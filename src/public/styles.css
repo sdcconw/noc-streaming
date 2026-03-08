@@ -1,0 +1,105 @@
+:root {
+  --sidebar-width: 248px;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  background: linear-gradient(180deg, #f4f7fb 0%, #ffffff 60%);
+}
+
+.app-shell {
+  display: block;
+}
+
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: var(--sidebar-width);
+  height: 100vh;
+  border-right: 1px solid var(--bs-border-color);
+  background: var(--bs-body-bg);
+  z-index: 1040;
+}
+
+.sidebar .nav-link {
+  color: var(--bs-body-color);
+  border-radius: 0.5rem;
+  margin-bottom: 0.2rem;
+}
+
+.sidebar .nav-link:hover,
+.sidebar .nav-link.active {
+  background: var(--bs-secondary-bg);
+}
+
+#sidebarMobileNav .nav-link.active {
+  background: var(--bs-secondary-bg);
+  border-radius: 0.5rem;
+}
+
+.content-wrap {
+  min-height: 100vh;
+}
+
+#jobsBody td {
+  white-space: nowrap;
+}
+
+#jobsBody .job-log-row td {
+  white-space: normal;
+}
+
+.job-log-box {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  background: var(--bs-tertiary-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.5rem;
+  max-height: 18rem;
+  overflow: auto;
+  padding: 0.65rem 0.75rem;
+}
+
+.job-log-line {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.35;
+}
+
+.job-log-line + .job-log-line {
+  margin-top: 0.2rem;
+}
+
+.badge-status {
+  font-size: 0.75rem;
+}
+
+.audit-pre {
+  max-width: 28rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+[data-bs-theme="dark"] body {
+  background: linear-gradient(180deg, #111826 0%, #0f1218 60%);
+}
+
+[data-bs-theme="dark"] .sidebar {
+  background: #131923;
+}
+
+[data-bs-theme="dark"] .sidebar .nav-link.active,
+[data-bs-theme="dark"] .sidebar .nav-link:hover {
+  background: #212c3d;
+}
+
+@media (min-width: 992px) {
+  .content-wrap {
+    margin-left: var(--sidebar-width);
+  }
+}

@@ -1,0 +1,984 @@
+openapi: 3.1.0
+info:
+  title: NOC Streaming API
+  version: 0.1.0
+  description: API for NOC dashboard streaming management.
+servers:
+  - url: http://localhost:3000
+    description: Local
+
+tags:
+  - name: Health
+  - name: Auth
+  - name: Admin
+  - name: Jobs
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: Logout success
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: Current user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current session user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthMeResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/admin/ldap-config:
+    get:
+      tags: [Admin]
+      summary: Get LDAP config
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: LDAP config
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/LdapConfig'
+                  - type: 'null'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    put:
+      tags: [Admin]
+      summary: Upsert LDAP config
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LdapConfigWriteRequest'
+      responses:
+        '200':
+          description: Saved LDAP config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LdapConfig'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/ldap-config/test:
+    post:
+      tags: [Admin]
+      summary: Test LDAP connection
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LdapConfigWriteRequest'
+      responses:
+        '200':
+          description: LDAP test success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LdapTestResponse'
+        '400':
+          description: LDAP test failed or validation error
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/LdapTestResponse'
+                  - $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/users:
+    get:
+      tags: [Admin]
+      summary: List local users
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminUser'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/audit-logs:
+    get:
+      tags: [Admin]
+      summary: List audit logs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+      responses:
+        '200':
+          description: Audit logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditLogEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Admin]
+      summary: Create local user
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminCreateUserRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUser'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/admin/users/{id}:
+    put:
+      tags: [Admin]
+      summary: Update local user
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminUpdateUserRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUser'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      tags: [Admin]
+      summary: Delete local user
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '204':
+          description: Deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/jobs:
+    get:
+      tags: [Jobs]
+      summary: List jobs
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Job list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Job'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Jobs]
+      summary: Create a job
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateJobRequest'
+      responses:
+        '201':
+          description: Job created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/jobs/{id}:
+    get:
+      tags: [Jobs]
+      summary: Get job
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Job detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      tags: [Jobs]
+      summary: Update job
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateJobRequest'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      tags: [Jobs]
+      summary: Delete job
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '204':
+          description: Deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/jobs/{id}/start:
+    post:
+      tags: [Jobs]
+      summary: Start job
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '202':
+          description: Start accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/jobs/{id}/stop:
+    post:
+      tags: [Jobs]
+      summary: Stop job
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '202':
+          description: Stop accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/jobs/{id}/restart:
+    post:
+      tags: [Jobs]
+      summary: Restart job
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '202':
+          description: Restart accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/jobs/{id}/status:
+    get:
+      tags: [Jobs]
+      summary: Get job status
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobStatusResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/jobs/{id}/logs:
+    get:
+      tags: [Jobs]
+      summary: Get job logs
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/JobLogEntry'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - $ref: '#/components/schemas/ErrorResponse'
+              - $ref: '#/components/schemas/ValidationErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: Conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    JobId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+
+  schemas:
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+
+    AuthMeResponse:
+      type: object
+      required: [id, username, role]
+      properties:
+        id:
+          type: integer
+          format: int64
+        username:
+          type: string
+        role:
+          type: string
+          enum: [admin, operator, viewer]
+
+    LoginResponse:
+      type: object
+      required: [expires_in, user]
+      properties:
+        expires_in:
+          type: integer
+          minimum: 1
+        user:
+          $ref: '#/components/schemas/AuthMeResponse'
+
+    MessageResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+
+    ErrorResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+
+    ValidationIssue:
+      type: object
+      required: [path, message]
+      properties:
+        path:
+          type: string
+        message:
+          type: string
+
+    ValidationErrorResponse:
+      type: object
+      required: [message, issues]
+      properties:
+        message:
+          type: string
+          example: validation error
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationIssue'
+
+    JobStatus:
+      type: string
+      enum: [STOPPED, STARTING, RUNNING, RECONNECTING, ERROR, STOPPING]
+
+    JobStatusResponse:
+      type: object
+      required: [id, status]
+      properties:
+        id:
+          type: integer
+          format: int64
+        status:
+          $ref: '#/components/schemas/JobStatus'
+
+    JobLogEntry:
+      type: object
+      required: [id, level, source, message, created_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+        level:
+          type: string
+        source:
+          type: string
+        message:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    LdapConfig:
+      type: object
+      required: [id, enabled, server_url, bind_dn, has_bind_password, base_dn, user_filter, group_dn]
+      properties:
+        id:
+          type: integer
+          format: int64
+        enabled:
+          type: boolean
+        server_url:
+          type: string
+        bind_dn:
+          type: string
+        has_bind_password:
+          type: boolean
+        base_dn:
+          type: string
+        user_filter:
+          type: string
+        group_dn:
+          type: string
+
+    LdapConfigWriteRequest:
+      type: object
+      required: [enabled, server_url, bind_dn, base_dn, user_filter]
+      properties:
+        enabled:
+          type: boolean
+        server_url:
+          type: string
+        bind_dn:
+          type: string
+        bind_password:
+          type: string
+          description: Optional; keep current password when omitted or empty.
+        base_dn:
+          type: string
+        user_filter:
+          type: string
+        group_dn:
+          type: string
+
+    LdapTestResponse:
+      type: object
+      required: [ok, message, elapsed_ms]
+      properties:
+        ok:
+          type: boolean
+        message:
+          type: string
+        elapsed_ms:
+          type: integer
+
+    AdminUser:
+      type: object
+      required: [id, username, role, auth_source, is_active, created_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+        username:
+          type: string
+        role:
+          type: string
+          enum: [admin, operator, viewer]
+        auth_source:
+          type: string
+          enum: [local, ldap]
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    AdminCreateUserRequest:
+      type: object
+      required: [username, password, role]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+        role:
+          type: string
+          enum: [admin, operator, viewer]
+        is_active:
+          type: boolean
+
+    AdminUpdateUserRequest:
+      type: object
+      minProperties: 1
+      properties:
+        password:
+          type: string
+        role:
+          type: string
+          enum: [admin, operator, viewer]
+        is_active:
+          type: boolean
+
+    AuditLogEntry:
+      type: object
+      required: [id, actor_username, action, target_type, target_id, created_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+        actor_user_id:
+          type: integer
+          format: int64
+          nullable: true
+        actor_username:
+          type: string
+        action:
+          type: string
+        target_type:
+          type: string
+        target_id:
+          type: string
+        detail_json:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    StreamProtocol:
+      type: string
+      enum: [rtmp, srt]
+
+    JobUrl:
+      type: object
+      required: [url, priority, refresh_interval_sec]
+      properties:
+        url:
+          type: string
+          format: uri
+        priority:
+          type: integer
+          minimum: 1
+        refresh_interval_sec:
+          type: integer
+          minimum: 60
+
+    Job:
+      type: object
+      required:
+        [
+          id,
+          name,
+          status,
+          resolution_width,
+          resolution_height,
+          fps,
+          bitrate_kbps,
+          codec,
+          preset,
+          protocol,
+          output_url,
+          refresh_interval_sec,
+          max_retries,
+          retry_interval_sec,
+          urls
+        ]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        status:
+          $ref: '#/components/schemas/JobStatus'
+        resolution_width:
+          type: integer
+          minimum: 1
+        resolution_height:
+          type: integer
+          minimum: 1
+        fps:
+          type: integer
+          minimum: 1
+        bitrate_kbps:
+          type: integer
+          minimum: 1
+        codec:
+          type: string
+        preset:
+          type: string
+        protocol:
+          $ref: '#/components/schemas/StreamProtocol'
+        output_url:
+          type: string
+        srt_latency_ms:
+          type: integer
+          minimum: 1
+          nullable: true
+        srt_mode:
+          type: string
+          nullable: true
+        refresh_interval_sec:
+          type: integer
+          minimum: 60
+        max_retries:
+          type: integer
+          minimum: 0
+        retry_interval_sec:
+          type: integer
+          minimum: 1
+        urls:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/JobUrl'
+
+    CreateJobRequest:
+      type: object
+      required:
+        [
+          name,
+          resolution_width,
+          resolution_height,
+          fps,
+          bitrate_kbps,
+          codec,
+          preset,
+          protocol,
+          output_url,
+          refresh_interval_sec,
+          max_retries,
+          retry_interval_sec,
+          urls
+        ]
+      properties:
+        name:
+          type: string
+        resolution_width:
+          type: integer
+          minimum: 1
+        resolution_height:
+          type: integer
+          minimum: 1
+        fps:
+          type: integer
+          minimum: 1
+        bitrate_kbps:
+          type: integer
+          minimum: 1
+        codec:
+          type: string
+        preset:
+          type: string
+        protocol:
+          $ref: '#/components/schemas/StreamProtocol'
+        output_url:
+          type: string
+        stream_key:
+          type: string
+        srt_latency_ms:
+          type: integer
+          minimum: 1
+          nullable: true
+        srt_mode:
+          type: string
+          nullable: true
+        refresh_interval_sec:
+          type: integer
+          minimum: 60
+        max_retries:
+          type: integer
+          minimum: 0
+        retry_interval_sec:
+          type: integer
+          minimum: 1
+        urls:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/JobUrl'
+
+    UpdateJobRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        resolution_width:
+          type: integer
+          minimum: 1
+        resolution_height:
+          type: integer
+          minimum: 1
+        fps:
+          type: integer
+          minimum: 1
+        bitrate_kbps:
+          type: integer
+          minimum: 1
+        codec:
+          type: string
+        preset:
+          type: string
+        protocol:
+          $ref: '#/components/schemas/StreamProtocol'
+        output_url:
+          type: string
+        stream_key:
+          type: string
+        srt_latency_ms:
+          type: integer
+          minimum: 1
+          nullable: true
+        srt_mode:
+          type: string
+          nullable: true
+        refresh_interval_sec:
+          type: integer
+          minimum: 60
+        max_retries:
+          type: integer
+          minimum: 0
+        retry_interval_sec:
+          type: integer
+          minimum: 1
+        urls:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/JobUrl'
+      minProperties: 1

@@ -1,0 +1,168 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum JobStatus {
+  STOPPED
+  STARTING
+  RUNNING
+  RECONNECTING
+  ERROR
+  STOPPING
+}
+
+enum StreamProtocol {
+  rtmp
+  srt
+}
+
+enum InputSourceType {
+  browser
+  test_pattern
+}
+
+enum AuthSource {
+  local
+  ldap
+}
+
+enum UserRole {
+  admin
+  operator
+  viewer
+}
+
+model Job {
+  id                  BigInt         @id @default(autoincrement()) @db.UnsignedBigInt
+  name                String         @unique @db.VarChar(128)
+  status              JobStatus      @default(STOPPED)
+  resolutionWidth     Int            @map("resolution_width") @db.UnsignedInt
+  resolutionHeight    Int            @map("resolution_height") @db.UnsignedInt
+  fps                 Int            @db.UnsignedInt
+  bitrateKbps         Int            @map("bitrate_kbps") @db.UnsignedInt
+  codec               String         @db.VarChar(32)
+  preset              String         @db.VarChar(32)
+  protocol            StreamProtocol
+  outputUrl           String         @map("output_url") @db.Text
+  streamKeyEnc        String         @map("stream_key_enc") @db.Text
+  inputSourceType     InputSourceType @default(browser) @map("input_source_type")
+  testPatternType     String?        @map("test_pattern_type") @db.VarChar(32)
+  testPatternParams   String?        @map("test_pattern_params") @db.Text
+  overlayEnabled      Boolean        @default(false) @map("overlay_enabled")
+  overlayMessage      String         @default("") @map("overlay_message") @db.VarChar(255)
+  overlayPosition     String         @default("top_left") @map("overlay_position") @db.VarChar(16)
+  overlayFontSizePx   Int            @default(24) @map("overlay_font_size_px") @db.UnsignedInt
+  srtLatencyMs        Int?           @map("srt_latency_ms") @db.UnsignedInt
+  srtMode             String?        @map("srt_mode") @db.VarChar(16)
+  refreshIntervalSec  Int            @map("refresh_interval_sec") @db.UnsignedInt
+  maxRetries          Int            @map("max_retries") @db.UnsignedInt
+  retryIntervalSec    Int            @map("retry_interval_sec") @db.UnsignedInt
+  createdAt           DateTime       @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt           DateTime       @updatedAt @map("updated_at") @db.DateTime(3)
+
+  urls                JobUrl[]
+  events              JobEvent[]
+  browserState        JobBrowserState?
+
+  @@index([status])
+  @@map("jobs")
+}
+
+model JobEvent {
+  id         BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  jobId      BigInt    @map("job_id") @db.UnsignedBigInt
+  level      String    @db.VarChar(16)
+  source     String    @db.VarChar(32)
+  message    String    @db.Text
+  createdAt  DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+
+  job        Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId, createdAt])
+  @@map("job_events")
+}
+
+model JobBrowserState {
+  jobId         BigInt    @id @map("job_id") @db.UnsignedBigInt
+  cookiesJson   String    @map("cookies_json") @db.LongText
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+
+  job           Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@map("job_browser_states")
+}
+
+model JobUrl {
+  id            BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  jobId         BigInt    @map("job_id") @db.UnsignedBigInt
+  scheduleTime  DateTime  @map("schedule_time") @db.Time(0)
+  url           String    @db.Text
+  priority      Int       @default(1) @db.UnsignedInt
+  refreshIntervalSec Int  @default(60) @map("refresh_interval_sec") @db.UnsignedInt
+  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+
+  job           Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId, scheduleTime, priority])
+  @@map("job_urls")
+}
+
+model User {
+  id            BigInt      @id @default(autoincrement()) @db.UnsignedBigInt
+  username      String      @unique @db.VarChar(128)
+  passwordHash  String      @map("password_hash") @db.Text
+  role          UserRole
+  authSource    AuthSource  @map("auth_source")
+  isActive      Boolean     @default(true) @map("is_active")
+  createdAt     DateTime    @default(now()) @map("created_at") @db.DateTime(3)
+  sessions      Session[]
+
+  @@map("users")
+}
+
+model Session {
+  id          BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  userId      BigInt    @map("user_id") @db.UnsignedBigInt
+  tokenId     String    @unique @map("token_id") @db.VarChar(64)
+  expiresAt   DateTime  @map("expires_at") @db.DateTime(3)
+  revokedAt   DateTime? @map("revoked_at") @db.DateTime(3)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("sessions")
+}
+
+model LdapConfig {
+  id               BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  serverUrl        String    @map("server_url") @db.Text
+  bindDn           String    @map("bind_dn") @db.Text
+  bindPasswordEnc  String    @map("bind_password_enc") @db.Text
+  baseDn           String    @map("base_dn") @db.Text
+  userFilter       String    @map("user_filter") @db.Text
+  groupDn          String    @map("group_dn") @db.Text
+  enabled          Boolean   @default(true)
+
+  @@map("ldap_config")
+}
+
+model AuditLog {
+  id            BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  actorUserId   BigInt?   @map("actor_user_id") @db.UnsignedBigInt
+  actorUsername String    @map("actor_username") @db.VarChar(128)
+  action        String    @db.VarChar(64)
+  targetType    String    @map("target_type") @db.VarChar(64)
+  targetId      String    @map("target_id") @db.VarChar(128)
+  detailJson    String?   @map("detail_json") @db.LongText
+  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+
+  @@index([createdAt])
+  @@index([targetType, targetId])
+  @@map("audit_logs")
+}
