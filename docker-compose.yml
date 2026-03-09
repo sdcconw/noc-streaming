@@ -4,10 +4,10 @@ services:
     container_name: noc-streaming-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: rootpass
-      MYSQL_DATABASE: noc_streaming
-      MYSQL_USER: noc_user
-      MYSQL_PASSWORD: noc_pass
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-noc_streaming}
+      MYSQL_USER: ${MYSQL_USER:-noc_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-noc_pass}
     ports:
       - "${MYSQL_PORT:-3306}:3306"
     volumes:
@@ -21,7 +21,7 @@ services:
           "-h",
           "localhost",
           "-uroot",
-          "-prootpass"
+          "-p${MYSQL_ROOT_PASSWORD:-rootpass}"
         ]
       interval: 10s
       timeout: 5s
@@ -67,7 +67,7 @@ services:
       VNC_PORT_SPAN: "${VNC_PORT_SPAN:-50}"
       NOVNC_ENABLED: "${NOVNC_ENABLED:-true}"
       NOVNC_PUBLIC_BASE_URL: "${NOVNC_PUBLIC_BASE_URL:-http://localhost:6080}"
-      DATABASE_URL: "${DATABASE_URL:?DATABASE_URL is required}"
+      DATABASE_URL: "${DATABASE_URL:-mysql://${MYSQL_USER:-noc_user}:${MYSQL_PASSWORD:-noc_pass}@mysql:3306/${MYSQL_DATABASE:-noc_streaming}}"
     ports:
       - "${NOCSTREAM_PORT:-3000}:3000"
       - "${VNC_HOST_PORT_RANGE:-15900-15949}:15900-15949"
