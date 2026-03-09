@@ -16,6 +16,7 @@ import { jobsRouter } from './routes/jobs.js';
 
 const app = express();
 const CSRF_COOKIE = 'noc_csrf';
+const OFFLINE_MODE = (process.env.OFFLINE ?? 'false').toLowerCase() === 'true';
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -71,6 +72,11 @@ app.use('/api', (req, res, next) => {
 });
 
 const publicDir = path.resolve(process.cwd(), 'src/public');
+app.get('/ui/runtime-config.js', (_req, res) => {
+  res.type('application/javascript');
+  res.setHeader('cache-control', 'no-store');
+  res.send(`window.__NOC_RUNTIME__ = Object.freeze({ offline: ${OFFLINE_MODE} });`);
+});
 app.use('/ui', express.static(publicDir));
 app.get('/', (_req, res) => {
   res.redirect('/ui/login.html');
