@@ -26,7 +26,7 @@ const novncPublicBaseUrl =
 const jobUrlSchema = z.object({
   url: z.string().url(),
   priority: z.number().int().min(1),
-  refresh_interval_sec: z.number().int().min(60).default(60)
+  refresh_interval_sec: z.number().int().min(10).default(10)
 });
 
 const createJobSchema = z.object({
@@ -49,7 +49,7 @@ const createJobSchema = z.object({
   overlay_font_size_px: z.number().int().min(8).max(200).default(24),
   srt_latency_ms: z.number().int().positive().optional().nullable(),
   srt_mode: z.string().optional().nullable(),
-  refresh_interval_sec: z.number().int().min(60),
+  refresh_interval_sec: z.number().int().min(10),
   max_retries: z.number().int().min(0),
   retry_interval_sec: z.number().int().min(1),
   urls: z.array(jobUrlSchema).min(1)

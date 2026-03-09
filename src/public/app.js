@@ -177,7 +177,7 @@ function parseSchedules(raw) {
       return {
         url: (url || '').trim(),
         priority: Number((priorityText || '1').trim()),
-        refresh_interval_sec: Number((refreshText || '60').trim())
+        refresh_interval_sec: Number((refreshText || '10').trim())
       };
     });
 }

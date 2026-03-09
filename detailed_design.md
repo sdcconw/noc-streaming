@@ -106,9 +106,9 @@ Docker Composeサービス:
 ### 6.3 URLローテーション
 
 - `priority` 昇順でURL配列を決定
-- 複数URL: 現在URLの `refresh_interval_sec` 経過で次URLへ
-- 単一URL: 同値で `Page.reload()`
-- 最小60秒
+- 複数URL: ジョブの `refresh_interval_sec`（切替間隔）経過で次URLへ
+- 単一URL: URLごとの `refresh_interval_sec`（URL更新間隔）経過で `Page.reload()`
+- 最小10秒
 
 ## 7. VNC / noVNC設計
 

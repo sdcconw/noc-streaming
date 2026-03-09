@@ -20,6 +20,12 @@ type WorkerProc = {
   ffmpeg?: ChildProcessWithoutNullStreams;
 };
 
+type UrlTab = {
+  targetId: string;
+  cdp: CdpClient;
+  url: string;
+};
+
 type JobRuntime = {
   jobId: bigint;
   mode: WorkerMode;
@@ -35,12 +41,16 @@ type JobRuntime = {
   reconnectTimer?: NodeJS.Timeout;
   currentUrl?: string;
   currentUrlId?: bigint;
+  switchIntervalSec?: number;
   currentRefreshIntervalSec?: number;
   debugPort: number;
   cdp?: CdpClient;
+  urlTabs: Map<bigint, UrlTab>;
+  lastSwitchAt?: number;
   lastBitrateKbps?: number;
   lastMetricAt?: number;
   currentInputSourceType?: 'browser' | 'test_pattern';
+  urlLastReloadAt: Map<bigint, number>;
 };
 
 type JobWithUrls = Job & { urls: JobUrl[] };
@@ -55,6 +65,7 @@ const START_TIMEOUT_VNC_MS = 10_000;
 const START_TIMEOUT_CHROMIUM_MS = 30_000;
 const START_TIMEOUT_FFMPEG_MS = 20_000;
 const URL_SWITCH_TIMEOUT_MS = 10_000;
+const MIN_REFRESH_SEC = 10;
 
 class JobWorkerService {
   private runtimes = new Map<bigint, JobRuntime>();
@@ -211,14 +222,22 @@ class JobWorkerService {
     const current = this.resolvePrimaryUrl(job) ?? job.urls[0];
     runtime.currentUrl = current?.url ?? 'about:blank';
     runtime.currentUrlId = current?.id;
-    runtime.currentRefreshIntervalSec = Math.max(current?.refreshIntervalSec ?? 60, 60);
+    runtime.switchIntervalSec = Math.max(job.refreshIntervalSec ?? MIN_REFRESH_SEC, MIN_REFRESH_SEC);
+    runtime.currentRefreshIntervalSec = Math.max(
+      MIN_REFRESH_SEC,
+      Math.min(runtime.switchIntervalSec, ...job.urls.map((u) => Math.max(u.refreshIntervalSec, MIN_REFRESH_SEC)))
+    );
+    runtime.lastSwitchAt = Date.now();
+    if (current?.id) {
+      runtime.urlLastReloadAt.set(current.id, Date.now());
+    }
 
     if (runtime.mode === 'mock') {
       await this.log(
         runtime.jobId,
         'info',
         'mock',
-        `mock start: source=${runtime.currentInputSourceType} url=${runtime.currentUrl} (refresh=${runtime.currentRefreshIntervalSec}s)`
+        `mock start: source=${runtime.currentInputSourceType} url=${runtime.currentUrl} (switch=${runtime.currentRefreshIntervalSec}s)`
       );
       this.startTimers(runtime, job.id, runtime.currentRefreshIntervalSec);
       return;
@@ -282,16 +301,15 @@ class JobWorkerService {
           '--no-first-run',
           '--disable-session-crashed-bubble',
           '--disable-infobars',
-          runtime.currentUrl ?? 'about:blank'
+          'about:blank'
         ],
         { DISPLAY: `:${runtime.displayNum}` }
       );
       await this.waitProcessHealthy(runtime.processes.chromium, START_TIMEOUT_CHROMIUM_MS, 'chromium');
-      runtime.cdp = await this.waitForCdp(runtime.debugPort, START_TIMEOUT_CHROMIUM_MS);
-      await this.applyBrowserLayout(runtime);
+      await this.ensureBrowserTabs(runtime, job);
       await this.restoreCookies(runtime);
-      await runtime.cdp.navigate(runtime.currentUrl ?? 'about:blank');
-      await this.applyBrowserLayout(runtime);
+      await this.refreshAllTabs(runtime, job, true);
+      await this.activateCurrentUrl(runtime, runtime.currentUrlId);
 
       await this.sleep(700);
       inputArgs = [
@@ -373,6 +391,11 @@ class JobWorkerService {
     if (runtime.processes.xvfb) procs.push(runtime.processes.xvfb);
 
     await this.persistCookies(runtime).catch(() => undefined);
+    const tabClients = [...runtime.urlTabs.values()].map((x) => x.cdp);
+    for (const cdp of tabClients) {
+      await cdp.close().catch(() => undefined);
+    }
+    runtime.urlTabs.clear();
     if (runtime.cdp) {
       await runtime.cdp.close().catch(() => undefined);
       runtime.cdp = undefined;
@@ -414,7 +437,7 @@ class JobWorkerService {
       clearInterval(runtime.refreshTimer);
     }
 
-    const sec = Math.max(refreshIntervalSec, 60);
+    const sec = Math.max(refreshIntervalSec, MIN_REFRESH_SEC);
     runtime.currentRefreshIntervalSec = sec;
     runtime.refreshTimer = setInterval(() => {
       void this.runRefreshTick(runtime, jobId);
@@ -434,51 +457,63 @@ class JobWorkerService {
     const job = await this.loadJob(jobId);
     if (!job || runtime.stopping) return;
     if (job.inputSourceType !== 'browser') return;
+    const switchSec = Math.max(job.refreshIntervalSec ?? MIN_REFRESH_SEC, MIN_REFRESH_SEC);
     const urls = this.resolveUrlsOrdered(job);
     if (!urls.length) return;
+    if (runtime.mode === 'real' && runtime.urlTabs.size === 0) {
+      await this.ensureBrowserTabs(runtime, job);
+      await this.restoreCookies(runtime);
+      await this.refreshAllTabs(runtime, job, true);
+      await this.activateCurrentUrl(runtime, runtime.currentUrlId ?? urls[0]?.id);
+    }
+    const minUrlSec = Math.max(
+      MIN_REFRESH_SEC,
+      Math.min(...urls.map((u) => Math.max(u.refreshIntervalSec, MIN_REFRESH_SEC)))
+    );
+    const tickSec = Math.max(MIN_REFRESH_SEC, Math.min(switchSec, minUrlSec));
+    if (runtime.currentRefreshIntervalSec !== tickSec) {
+      this.setRefreshTimer(runtime, jobId, tickSec);
+    }
 
+    const now = Date.now();
+    for (const entry of urls) {
+      const reloadSec = Math.max(entry.refreshIntervalSec, MIN_REFRESH_SEC);
+      const lastReloadAt = runtime.urlLastReloadAt.get(entry.id) ?? 0;
+      if (now - lastReloadAt < reloadSec * 1000) continue;
+      await this.log(jobId, 'info', 'scheduler', `url reload (${reloadSec}s) -> ${entry.url}`);
+      if (runtime.mode === 'real') {
+        const ok = await this.reloadUrlTab(runtime, entry.id);
+        if (!ok) {
+          await this.log(jobId, 'warn', 'scheduler', `url reload failed: ${entry.url}`);
+          continue;
+        }
+      }
+      runtime.urlLastReloadAt.set(entry.id, now);
+    }
+
+    const lastSwitchAt = runtime.lastSwitchAt ?? 0;
+    if (now - lastSwitchAt < switchSec * 1000) return;
     if (urls.length > 1) {
       const currentIndex = urls.findIndex((u) => u.id === runtime.currentUrlId);
       const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % urls.length : 0;
       const next = urls[nextIndex];
-      const nextRefresh = Math.max(next.refreshIntervalSec, 60);
-
       await this.log(
         jobId,
         'info',
         'scheduler',
-        `url rotate -> ${next.url} (refresh=${nextRefresh}s)`
+        `url rotate -> ${next.url} (switch=${switchSec}s, url_refresh=${Math.max(next.refreshIntervalSec, MIN_REFRESH_SEC)}s)`
       );
-
       runtime.currentUrl = next.url;
       runtime.currentUrlId = next.id;
-      this.setRefreshTimer(runtime, jobId, nextRefresh);
-
+      runtime.lastSwitchAt = now;
       if (runtime.mode === 'real') {
-        const switched = await this.switchUrlWithRetry(runtime, next.url);
+        const switched = await this.activateCurrentUrl(runtime, next.id);
         if (!switched) {
           await this.log(jobId, 'error', 'scheduler', `url rotate failed after retries: ${next.url}`);
         }
       }
-      return;
-    }
-
-    await this.log(
-      jobId,
-      'info',
-      'scheduler',
-      `refresh tick (${runtime.currentRefreshIntervalSec ?? 60}s) url=${runtime.currentUrl ?? 'about:blank'}`
-    );
-    if (runtime.mode === 'real') {
-      const ok = await this.reloadPage(runtime);
-      if (!ok) {
-        await this.log(jobId, 'warn', 'scheduler', 'refresh failed, retrying once');
-        const retryOk = await this.reloadPage(runtime);
-        if (!retryOk) {
-          await this.log(jobId, 'warn', 'scheduler', 'refresh retry failed, restarting chromium');
-          await this.restartChromium(runtime, runtime.currentUrl ?? 'about:blank');
-        }
-      }
+    } else {
+      runtime.lastSwitchAt = now;
     }
   }
 
@@ -519,8 +554,14 @@ class JobWorkerService {
   // Chromiumを再起動して指定URLへ復帰させる。
   private async restartChromium(runtime: JobRuntime, url: string) {
     if (runtime.mode !== 'real') return;
+    const job = await this.loadJob(runtime.jobId);
+    if (!job || job.inputSourceType !== 'browser') return;
 
     await this.persistCookies(runtime).catch(() => undefined);
+    for (const tab of runtime.urlTabs.values()) {
+      await tab.cdp.close().catch(() => undefined);
+    }
+    runtime.urlTabs.clear();
     if (runtime.cdp) {
       await runtime.cdp.close().catch(() => undefined);
       runtime.cdp = undefined;
@@ -552,16 +593,83 @@ class JobWorkerService {
         '--no-first-run',
         '--disable-session-crashed-bubble',
         '--disable-infobars',
-        url
+        'about:blank'
       ],
       { DISPLAY: `:${runtime.displayNum}` }
     );
     await this.waitProcessHealthy(runtime.processes.chromium, START_TIMEOUT_CHROMIUM_MS, 'chromium');
-    runtime.cdp = await this.waitForCdp(runtime.debugPort, START_TIMEOUT_CHROMIUM_MS);
-    await this.applyBrowserLayout(runtime);
+    await this.ensureBrowserTabs(runtime, job);
     await this.restoreCookies(runtime);
-    await runtime.cdp.navigate(url);
-    await this.applyBrowserLayout(runtime);
+    await this.refreshAllTabs(runtime, job, true);
+    await this.activateCurrentUrl(runtime, runtime.currentUrlId);
+    runtime.currentUrl = url || runtime.currentUrl;
+  }
+
+  // URLごとのタブを生成してCDPセッションを確立する。
+  private async ensureBrowserTabs(runtime: JobRuntime, job: JobWithUrls) {
+    runtime.urlTabs.clear();
+    const urls = this.resolveUrlsOrdered(job);
+    for (const entry of urls) {
+      const target = await CdpClient.createTarget(runtime.debugPort, entry.url);
+      if (!target.id || !target.webSocketDebuggerUrl) {
+        throw new Error(`target creation failed: ${entry.url}`);
+      }
+      const cdp = await CdpClient.connectByWsUrl(target.webSocketDebuggerUrl);
+      const tab: UrlTab = { targetId: target.id, cdp, url: entry.url };
+      runtime.urlTabs.set(entry.id, tab);
+      runtime.urlLastReloadAt.set(entry.id, Date.now());
+    }
+  }
+
+  // 全タブに対して初期ロードまたは再ロードを行う。
+  private async refreshAllTabs(runtime: JobRuntime, job: JobWithUrls, forceNavigate = false) {
+    const urls = this.resolveUrlsOrdered(job);
+    for (const entry of urls) {
+      const tab = runtime.urlTabs.get(entry.id);
+      if (!tab) continue;
+      if (forceNavigate) {
+        await this.navigateTabWithTimeout(tab.cdp, entry.url, URL_SWITCH_TIMEOUT_MS);
+      } else {
+        await tab.cdp.reload();
+      }
+      await this.applyBrowserLayout(runtime, tab.cdp);
+      runtime.urlLastReloadAt.set(entry.id, Date.now());
+    }
+  }
+
+  // 指定URLタブを前面表示に切り替える。
+  private async activateCurrentUrl(runtime: JobRuntime, urlId?: bigint): Promise<boolean> {
+    if (!urlId) return false;
+    const tab = runtime.urlTabs.get(urlId);
+    if (!tab) return false;
+    for (let i = 0; i < 3; i += 1) {
+      try {
+        await CdpClient.activateTarget(runtime.debugPort, tab.targetId);
+        await this.applyBrowserLayout(runtime, tab.cdp);
+        runtime.cdp = tab.cdp;
+        return true;
+      } catch (err) {
+        await this.log(runtime.jobId, 'warn', 'scheduler', `activate retry ${i + 1}/3 failed: ${String(err)}`);
+        await this.sleep(300);
+      }
+    }
+    return false;
+  }
+
+  // 指定URLタブを再読込する。
+  private async reloadUrlTab(runtime: JobRuntime, urlId: bigint): Promise<boolean> {
+    const tab = runtime.urlTabs.get(urlId);
+    if (!tab) return false;
+    for (let i = 0; i < 2; i += 1) {
+      try {
+        await tab.cdp.reload();
+        await this.applyBrowserLayout(runtime, tab.cdp);
+        return true;
+      } catch {
+        await this.sleep(200);
+      }
+    }
+    return false;
   }
 
   // 優先度順で先頭のURLエントリを取得する。
@@ -691,6 +799,8 @@ class JobWorkerService {
       processes: {},
       retries: 0,
       stopping: false,
+      urlTabs: new Map<bigint, UrlTab>(),
+      urlLastReloadAt: new Map<bigint, number>(),
       lock: Promise.resolve()
     };
     this.runtimes.set(jobId, runtime);
@@ -799,25 +909,30 @@ class JobWorkerService {
   }
 
   // キャプチャ向けビューポートとスタイルをブラウザへ適用する。
-  private async applyBrowserLayout(runtime: JobRuntime) {
-    if (!runtime.cdp) return;
-    await runtime.cdp.setViewport(runtime.captureWidth, runtime.captureHeight).catch(() => undefined);
-    await runtime.cdp.applyCaptureStyle().catch(() => undefined);
+  private async applyBrowserLayout(runtime: JobRuntime, cdp = runtime.cdp) {
+    if (!cdp) return;
+    await cdp.setViewport(runtime.captureWidth, runtime.captureHeight).catch(() => undefined);
+    await cdp.applyCaptureStyle().catch(() => undefined);
   }
 
   // 保存済みCookieをブラウザへ復元する。
   private async restoreCookies(runtime: JobRuntime) {
-    if (!runtime.cdp) return;
     const state = await prisma.jobBrowserState.findUnique({ where: { jobId: runtime.jobId } });
     if (!state?.cookiesJson) return;
     const cookies = JSON.parse(state.cookiesJson) as unknown[];
-    await runtime.cdp.setCookies(cookies);
+    for (const tab of runtime.urlTabs.values()) {
+      await tab.cdp.setCookies(cookies).catch(() => undefined);
+    }
+    if (runtime.cdp && runtime.urlTabs.size === 0) {
+      await runtime.cdp.setCookies(cookies).catch(() => undefined);
+    }
   }
 
   // 現在のCookieをDBへ永続化する。
   private async persistCookies(runtime: JobRuntime) {
-    if (!runtime.cdp) return;
-    const cookies = await runtime.cdp.getCookies();
+    const active = runtime.cdp ?? runtime.urlTabs.values().next().value?.cdp;
+    if (!active) return;
+    const cookies = await active.getCookies();
     await prisma.jobBrowserState.upsert({
       where: { jobId: runtime.jobId },
       update: { cookiesJson: JSON.stringify(cookies) },
@@ -856,9 +971,13 @@ class JobWorkerService {
   // タイムアウト付きでブラウザ遷移を実行する。
   private async navigateWithTimeout(runtime: JobRuntime, url: string, timeoutMs: number) {
     if (!runtime.cdp) throw new Error('cdp unavailable');
+    await this.navigateTabWithTimeout(runtime.cdp, url, timeoutMs);
+  }
 
+  // タイムアウト付きで指定タブを遷移する。
+  private async navigateTabWithTimeout(cdp: CdpClient, url: string, timeoutMs: number) {
     await Promise.race([
-      runtime.cdp.navigate(url),
+      cdp.navigate(url),
       (async () => {
         await this.sleep(timeoutMs);
         throw new Error(`navigate timeout (${timeoutMs}ms)`);

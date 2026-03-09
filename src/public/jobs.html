@@ -119,9 +119,10 @@
                   <div class="col-md-4"><label class="form-label">入力ソース</label><select name="input_source_type" class="form-select"><option value="browser">Browser</option><option value="test_pattern">Test Pattern</option></select></div>
                   <div class="col-md-4"><label class="form-label">テストパターン</label><select name="test_pattern_type" class="form-select"><option value="testsrc2">testsrc2</option><option value="smptebars">smptebars</option><option value="testsrc">testsrc</option><option value="color">color</option></select></div>
                   <div class="col-md-4"><label class="form-label">テストパラメータ</label><input name="test_pattern_params" class="form-control" placeholder="例: duration=0" /></div>
+                  <div class="col-md-4"><label class="form-label">画面切替間隔(sec)</label><input name="refresh_interval_sec" type="number" class="form-control" value="30" min="10" required /></div>
                   <div class="col-12">
-                    <label class="form-label">表示URL (1行: URL,PRIORITY,REFRESH_SEC / 複数行対応)</label>
-                    <textarea name="urls" class="form-control" rows="4">https://example.com,1,60</textarea>
+                    <label class="form-label">表示URL (1行: URL,PRIORITY,URL_REFRESH_SEC / 複数行対応)</label>
+                    <textarea name="urls" class="form-control" rows="4">https://example.com,1,1800</textarea>
                   </div>
                 </div>
               </div>
@@ -136,7 +137,6 @@
                   <div class="col-md-4"><label class="form-label">メッセージ</label><input name="overlay_message" class="form-control" placeholder="NOC" /></div>
                   <div class="col-md-2"><label class="form-label">表示位置</label><select name="overlay_position" class="form-select"><option value="top_left">左上</option><option value="top_right">右上</option><option value="bottom_left">左下</option><option value="bottom_right">右下</option></select></div>
                   <div class="col-md-2"><label class="form-label">文字サイズ(px)</label><input name="overlay_font_size_px" type="number" class="form-control" value="24" min="8" max="200" /></div>
-                  <div class="col-md-4"><label class="form-label">Refresh(sec)</label><input name="refresh_interval_sec" type="number" class="form-control" value="900" required /></div>
                   <div class="col-md-4"><label class="form-label">Max Retry</label><input name="max_retries" type="number" class="form-control" value="3" required /></div>
                   <div class="col-md-4"><label class="form-label">Retry(sec)</label><input name="retry_interval_sec" type="number" class="form-control" value="10" required /></div>
                 </div>
@@ -191,8 +191,9 @@
                   <div class="col-md-4"><label class="form-label">入力ソース</label><select name="input_source_type" class="form-select"><option value="browser">Browser</option><option value="test_pattern">Test Pattern</option></select></div>
                   <div class="col-md-4"><label class="form-label">テストパターン</label><select name="test_pattern_type" class="form-select"><option value="testsrc2">testsrc2</option><option value="smptebars">smptebars</option><option value="testsrc">testsrc</option><option value="color">color</option></select></div>
                   <div class="col-md-4"><label class="form-label">テストパラメータ</label><input name="test_pattern_params" class="form-control" placeholder="例: duration=0" /></div>
+                  <div class="col-md-4"><label class="form-label">画面切替間隔(sec)</label><input name="refresh_interval_sec" type="number" class="form-control" min="10" required /></div>
                   <div class="col-12">
-                    <label class="form-label">表示URL (1行: URL,PRIORITY,REFRESH_SEC / 複数行対応)</label>
+                    <label class="form-label">表示URL (1行: URL,PRIORITY,URL_REFRESH_SEC / 複数行対応)</label>
                     <textarea name="urls" class="form-control" rows="4"></textarea>
                   </div>
                 </div>
@@ -208,7 +209,6 @@
                   <div class="col-md-4"><label class="form-label">メッセージ</label><input name="overlay_message" class="form-control" placeholder="NOC" /></div>
                   <div class="col-md-2"><label class="form-label">表示位置</label><select name="overlay_position" class="form-select"><option value="top_left">左上</option><option value="top_right">右上</option><option value="bottom_left">左下</option><option value="bottom_right">右下</option></select></div>
                   <div class="col-md-2"><label class="form-label">文字サイズ(px)</label><input name="overlay_font_size_px" type="number" class="form-control" value="24" min="8" max="200" /></div>
-                  <div class="col-md-4"><label class="form-label">Refresh(sec)</label><input name="refresh_interval_sec" type="number" class="form-control" required /></div>
                   <div class="col-md-4"><label class="form-label">Max Retry</label><input name="max_retries" type="number" class="form-control" required /></div>
                   <div class="col-md-4"><label class="form-label">Retry(sec)</label><input name="retry_interval_sec" type="number" class="form-control" required /></div>
                 </div>

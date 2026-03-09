@@ -7,6 +7,13 @@ type Pending = {
   reject: (e: unknown) => void;
 };
 
+export type CdpTargetInfo = {
+  id: string;
+  type?: string;
+  url?: string;
+  webSocketDebuggerUrl?: string;
+};
+
 export class CdpClient {
   private ws: WebSocket;
   private seq = 0;
@@ -32,6 +39,11 @@ export class CdpClient {
   // 指定ポートのCDPエンドポイントへ接続し、必要ドメインを有効化する。
   static async connect(debugPort: number): Promise<CdpClient> {
     const wsUrl = await resolveWsUrl(debugPort);
+    return this.connectByWsUrl(wsUrl);
+  }
+
+  // 既知のWebSocket URLへ接続してクライアントを生成する。
+  static async connectByWsUrl(wsUrl: string): Promise<CdpClient> {
     const ws = await new Promise<WebSocket>((resolve, reject) => {
       const s = new WebSocket(wsUrl);
       s.once('open', () => resolve(s));
@@ -43,6 +55,36 @@ export class CdpClient {
     await c.send('Runtime.enable');
     await c.send('Network.enable');
     return c;
+  }
+
+  // デバッグポート上のターゲット一覧を取得する。
+  static async listTargets(debugPort: number): Promise<CdpTargetInfo[]> {
+    const res = await fetch(`http://127.0.0.1:${debugPort}/json/list`);
+    if (!res.ok) throw new Error(`list targets failed: ${res.status}`);
+    return (await res.json()) as CdpTargetInfo[];
+  }
+
+  // 指定URLの新規ターゲット（タブ）を作成する。
+  static async createTarget(debugPort: number, url: string): Promise<CdpTargetInfo> {
+    const endpoint = `http://127.0.0.1:${debugPort}/json/new?${encodeURIComponent(url)}`;
+    // Chromium実装差分に対応するため PUT -> GET の順で試行する。
+    for (const method of ['PUT', 'GET']) {
+      const res = await fetch(endpoint, { method });
+      if (res.ok) {
+        return (await res.json()) as CdpTargetInfo;
+      }
+    }
+    throw new Error('create target failed');
+  }
+
+  // 指定ターゲットをアクティブ化して前面表示に切り替える。
+  static async activateTarget(debugPort: number, targetId: string): Promise<void> {
+    const endpoint = `http://127.0.0.1:${debugPort}/json/activate/${encodeURIComponent(targetId)}`;
+    for (const method of ['GET', 'PUT']) {
+      const res = await fetch(endpoint, { method });
+      if (res.ok) return;
+    }
+    throw new Error(`activate target failed: ${targetId}`);
   }
 
   // WebSocket接続をクローズする。
