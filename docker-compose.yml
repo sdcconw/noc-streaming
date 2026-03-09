@@ -10,6 +10,9 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-noc_pass}
     ports:
       - "${MYSQL_PORT:-3306}:3306"
+    dns:
+      - "${DNS_SERVER_1:-8.8.8.8}"
+      - "${DNS_SERVER_2:-1.1.1.1}"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
@@ -40,6 +43,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: "3000"
+      TZ: "${TZ:-Asia/Tokyo}"
       OFFLINE: "${OFFLINE:-false}"
       HSTS_ENABLED: "${HSTS_ENABLED:-true}"
       HSTS_MAX_AGE: "${HSTS_MAX_AGE:-31536000}"
@@ -71,6 +75,9 @@ services:
     ports:
       - "${NOCSTREAM_PORT:-3000}:3000"
       - "${VNC_HOST_PORT_RANGE:-15900-15949}:15900-15949"
+    dns:
+      - "${DNS_SERVER_1:-8.8.8.8}"
+      - "${DNS_SERVER_2:-1.1.1.1}"
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -91,6 +98,9 @@ services:
       VNC_TOKEN_MAX_ID: "${VNC_TOKEN_MAX_ID:-1000}"
     ports:
       - "${NOVNC_PORT:-6080}:6080"
+    dns:
+      - "${DNS_SERVER_1:-8.8.8.8}"
+      - "${DNS_SERVER_2:-1.1.1.1}"
     command: >
       bash -lc '
         set -eu;
