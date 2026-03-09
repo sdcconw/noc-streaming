@@ -1,13 +1,13 @@
 services:
   mysql:
-    image: ${MYSQL_IMAGE:-mysql:8.4}
-    container_name: ${MYSQL_CONTAINER_NAME:-noc-streaming-mysql}
-    restart: ${RESTART_POLICY:-unless-stopped}
+    image: mysql:8.4
+    container_name: noc-streaming-mysql
+    restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-noc_streaming}
-      MYSQL_USER: ${MYSQL_USER:-noc_user}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-noc_pass}
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: noc_streaming
+      MYSQL_USER: noc_user
+      MYSQL_PASSWORD: noc_pass
     ports:
       - "${MYSQL_PORT:-3306}:3306"
     volumes:
@@ -21,7 +21,7 @@ services:
           "-h",
           "localhost",
           "-uroot",
-          "-p${MYSQL_ROOT_PASSWORD:-rootpass}"
+          "-prootpass"
         ]
       interval: 10s
       timeout: 5s
@@ -31,15 +31,15 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ${NOCSTREAM_CONTAINER_NAME:-noc-streaming-nocstream}
-    restart: ${RESTART_POLICY:-unless-stopped}
-    shm_size: "${NOCSTREAM_SHM_SIZE:-1gb}"
+    container_name: noc-streaming-nocstream
+    restart: unless-stopped
+    shm_size: "1gb"
     depends_on:
       mysql:
         condition: service_healthy
     environment:
-      NODE_ENV: ${NODE_ENV:-production}
-      PORT: "${PORT:-3000}"
+      NODE_ENV: production
+      PORT: "3000"
       OFFLINE: "${OFFLINE:-false}"
       HSTS_ENABLED: "${HSTS_ENABLED:-true}"
       HSTS_MAX_AGE: "${HSTS_MAX_AGE:-31536000}"
@@ -49,8 +49,8 @@ services:
       SECRET_ENCRYPTION_KEY: "${SECRET_ENCRYPTION_KEY:?SECRET_ENCRYPTION_KEY is required}"
       AUTH_TOKEN_TTL_SECONDS: "${AUTH_TOKEN_TTL_SECONDS:-3600}"
       COOKIE_SECURE: "${COOKIE_SECURE:-false}"
-      WORKER_MODE: "${WORKER_MODE:-real}"
-      WORKER_MONITOR_INTERVAL_MS: "${WORKER_MONITOR_INTERVAL_MS:-5000}"
+      WORKER_MODE: "real"
+      WORKER_MONITOR_INTERVAL_MS: "5000"
       ADMIN_USERNAME: "${ADMIN_USERNAME:-admin}"
       ADMIN_PASSWORD: "${ADMIN_PASSWORD:-password}"
       ADMIN_FORCE_RESET_PASSWORD: "${ADMIN_FORCE_RESET_PASSWORD:-true}"
@@ -67,7 +67,7 @@ services:
       VNC_PORT_SPAN: "${VNC_PORT_SPAN:-50}"
       NOVNC_ENABLED: "${NOVNC_ENABLED:-true}"
       NOVNC_PUBLIC_BASE_URL: "${NOVNC_PUBLIC_BASE_URL:-http://localhost:6080}"
-      DATABASE_URL: "${DATABASE_URL_COMPOSE:-mysql://${MYSQL_USER:-noc_user}:${MYSQL_PASSWORD:-noc_pass}@mysql:3306/${MYSQL_DATABASE:-noc_streaming}}"
+      DATABASE_URL: "${DATABASE_URL:?DATABASE_URL is required}"
     ports:
       - "${NOCSTREAM_PORT:-3000}:3000"
       - "${VNC_HOST_PORT_RANGE:-15900-15949}:15900-15949"
@@ -75,17 +75,17 @@ services:
       - "host.docker.internal:host-gateway"
 
   novnc:
-    image: ${NOVNC_IMAGE:-theasp/novnc:latest}
-    container_name: ${NOVNC_CONTAINER_NAME:-noc-streaming-novnc}
-    restart: ${RESTART_POLICY:-unless-stopped}
+    image: theasp/novnc:latest
+    container_name: noc-streaming-novnc
+    restart: unless-stopped
     depends_on:
       nocstream:
         condition: service_started
     environment:
-      RUN_XTERM: "${NOVNC_RUN_XTERM:-no}"
-      RUN_FLUXBOX: "${NOVNC_RUN_FLUXBOX:-no}"
-      DISPLAY_WIDTH: "${NOVNC_DISPLAY_WIDTH:-1920}"
-      DISPLAY_HEIGHT: "${NOVNC_DISPLAY_HEIGHT:-1080}"
+      RUN_XTERM: "no"
+      RUN_FLUXBOX: "no"
+      DISPLAY_WIDTH: "1920"
+      DISPLAY_HEIGHT: "1080"
       VNC_BASE_PORT: "${VNC_BASE_PORT:-15900}"
       VNC_PORT_SPAN: "${VNC_PORT_SPAN:-50}"
       VNC_TOKEN_MAX_ID: "${VNC_TOKEN_MAX_ID:-1000}"

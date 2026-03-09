@@ -10,16 +10,29 @@ const alertBox = document.getElementById('alertBox');
 const sidebarLinks = Array.from(document.querySelectorAll('#sidebarNav .nav-link, #sidebarMobileNav .nav-link'));
 const adminOnlyLinks = Array.from(document.querySelectorAll('.admin-only'));
 
+// localStorageが利用不可な環境でもテーマ初期化で落ちないようにする。
+function loadThemeFromStorage() {
+  try {
+    return localStorage.getItem('theme') || 'light';
+  } catch {
+    return 'light';
+  }
+}
+
 // テーマ属性を切り替えてローカル保存する。
 function setTheme(theme) {
   document.documentElement.setAttribute('data-bs-theme', theme);
-  localStorage.setItem('theme', theme);
+  try {
+    localStorage.setItem('theme', theme);
+  } catch {
+    // ignore storage failures
+  }
   if (themeToggleBtn) {
     themeToggleBtn.innerHTML = theme === 'dark' ? '<i class="bi bi-sun-fill"></i>' : '<i class="bi bi-moon-fill"></i>';
   }
 }
 
-setTheme(localStorage.getItem('theme') || 'light');
+setTheme(loadThemeFromStorage());
 themeToggleBtn?.addEventListener('click', () => {
   const current = document.documentElement.getAttribute('data-bs-theme');
   setTheme(current === 'dark' ? 'light' : 'dark');
@@ -197,6 +210,13 @@ async function initJobsPage() {
   const editJobForm = document.getElementById('editJobForm');
 
   if (!jobsBody) return;
+  if (window.__bootstrapReady && typeof window.__bootstrapReady.then === 'function') {
+    await window.__bootstrapReady;
+  }
+  if (!window.bootstrap?.Modal) {
+    showAlert('danger', 'Bootstrap JSの読み込みに失敗しました');
+    return;
+  }
 
   const createJobModal = createJobModalEl ? new bootstrap.Modal(createJobModalEl) : null;
   const editJobModal = editJobModalEl ? new bootstrap.Modal(editJobModalEl) : null;
