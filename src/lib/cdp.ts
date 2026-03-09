@@ -89,8 +89,25 @@ export class CdpClient {
 
   // WebSocket接続をクローズする。
   async close() {
+    if (this.ws.readyState === WebSocket.CLOSED) return;
+    if (this.ws.readyState === WebSocket.CLOSING) {
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, 1000);
+        this.ws.once('close', () => {
+          clearTimeout(timer);
+          resolve();
+        });
+      });
+      return;
+    }
     await new Promise<void>((resolve) => {
-      this.ws.once('close', () => resolve());
+      const done = () => {
+        clearTimeout(timer);
+        resolve();
+      };
+      const timer = setTimeout(done, 1000);
+      this.ws.once('close', done);
+      this.ws.once('error', done);
       this.ws.close();
     });
   }

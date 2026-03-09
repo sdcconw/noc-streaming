@@ -391,15 +391,13 @@ class JobWorkerService {
     if (runtime.processes.xvfb) procs.push(runtime.processes.xvfb);
 
     await this.persistCookies(runtime).catch(() => undefined);
-    const tabClients = [...runtime.urlTabs.values()].map((x) => x.cdp);
-    for (const cdp of tabClients) {
+    const clients = new Set<CdpClient>([...runtime.urlTabs.values()].map((x) => x.cdp));
+    if (runtime.cdp) clients.add(runtime.cdp);
+    for (const cdp of clients) {
       await cdp.close().catch(() => undefined);
     }
     runtime.urlTabs.clear();
-    if (runtime.cdp) {
-      await runtime.cdp.close().catch(() => undefined);
-      runtime.cdp = undefined;
-    }
+    runtime.cdp = undefined;
     runtime.processes = {};
 
     for (const proc of procs) {
@@ -558,14 +556,13 @@ class JobWorkerService {
     if (!job || job.inputSourceType !== 'browser') return;
 
     await this.persistCookies(runtime).catch(() => undefined);
-    for (const tab of runtime.urlTabs.values()) {
-      await tab.cdp.close().catch(() => undefined);
+    const clients = new Set<CdpClient>([...runtime.urlTabs.values()].map((x) => x.cdp));
+    if (runtime.cdp) clients.add(runtime.cdp);
+    for (const cdp of clients) {
+      await cdp.close().catch(() => undefined);
     }
     runtime.urlTabs.clear();
-    if (runtime.cdp) {
-      await runtime.cdp.close().catch(() => undefined);
-      runtime.cdp = undefined;
-    }
+    runtime.cdp = undefined;
 
     const proc = runtime.processes.chromium;
     if (proc && proc.exitCode === null) {
