@@ -17,6 +17,9 @@ import { jobsRouter } from './routes/jobs.js';
 const app = express();
 const CSRF_COOKIE = 'noc_csrf';
 const OFFLINE_MODE = (process.env.OFFLINE ?? 'false').toLowerCase() === 'true';
+const HSTS_ENABLED = (process.env.HSTS_ENABLED ?? 'true').toLowerCase() === 'true';
+const CSP_UPGRADE_INSECURE_REQUESTS =
+  (process.env.CSP_UPGRADE_INSECURE_REQUESTS ?? 'false').toLowerCase() === 'true';
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -37,9 +40,16 @@ app.use(
         connectSrc: ["'self'"],
         frameAncestors: ["'none'"],
         objectSrc: ["'none'"],
-        baseUri: ["'self'"]
+        baseUri: ["'self'"],
+        upgradeInsecureRequests: CSP_UPGRADE_INSECURE_REQUESTS ? [] : null
       }
-    }
+    },
+    hsts: HSTS_ENABLED
+      ? {
+          maxAge: Number(process.env.HSTS_MAX_AGE ?? 31536000),
+          includeSubDomains: (process.env.HSTS_INCLUDE_SUBDOMAINS ?? 'true').toLowerCase() === 'true'
+        }
+      : false
   })
 );
 
