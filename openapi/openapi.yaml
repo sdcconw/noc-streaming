@@ -846,6 +846,22 @@ components:
           $ref: '#/components/schemas/StreamProtocol'
         output_url:
           type: string
+        input_source_type:
+          type: string
+          enum: [browser, test_pattern, ssh_terminal]
+        test_pattern_type:
+          type: string
+          nullable: true
+        test_pattern_params:
+          type: string
+          nullable: true
+        ssh_command:
+          type: string
+          nullable: true
+        terminal_bg_color:
+          type: string
+        terminal_fg_color:
+          type: string
         srt_latency_ms:
           type: integer
           minimum: 1
@@ -911,6 +927,22 @@ components:
           type: string
         stream_key:
           type: string
+        input_source_type:
+          type: string
+          enum: [browser, test_pattern, ssh_terminal]
+        test_pattern_type:
+          type: string
+          nullable: true
+        test_pattern_params:
+          type: string
+          nullable: true
+        ssh_command:
+          type: string
+          nullable: true
+        terminal_bg_color:
+          type: string
+        terminal_fg_color:
+          type: string
         srt_latency_ms:
           type: integer
           minimum: 1
@@ -959,6 +991,22 @@ components:
         output_url:
           type: string
         stream_key:
+          type: string
+        input_source_type:
+          type: string
+          enum: [browser, test_pattern, ssh_terminal]
+        test_pattern_type:
+          type: string
+          nullable: true
+        test_pattern_params:
+          type: string
+          nullable: true
+        ssh_command:
+          type: string
+          nullable: true
+        terminal_bg_color:
+          type: string
+        terminal_fg_color:
           type: string
         srt_latency_ms:
           type: integer

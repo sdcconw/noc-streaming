@@ -17,6 +17,7 @@ type WorkerProc = {
   xvfb?: ChildProcessWithoutNullStreams;
   vnc?: ChildProcessWithoutNullStreams;
   chromium?: ChildProcessWithoutNullStreams;
+  terminal?: ChildProcessWithoutNullStreams;
   ffmpeg?: ChildProcessWithoutNullStreams;
 };
 
@@ -49,7 +50,7 @@ type JobRuntime = {
   lastSwitchAt?: number;
   lastBitrateKbps?: number;
   lastMetricAt?: number;
-  currentInputSourceType?: 'browser' | 'test_pattern';
+  currentInputSourceType?: 'browser' | 'test_pattern' | 'ssh_terminal';
   urlLastReloadAt: Map<bigint, number>;
 };
 
@@ -147,15 +148,18 @@ class JobWorkerService {
       if (!this.isRunning(runtime)) continue;
 
       if (runtime.mode === 'real') {
-        const browserMode = (runtime.currentInputSourceType ?? 'browser') === 'browser';
-        const missing = browserMode
+        const sourceType = runtime.currentInputSourceType ?? 'browser';
+        const interactiveMode = sourceType === 'browser' || sourceType === 'ssh_terminal';
+        const missing = interactiveMode
           ? !runtime.processes.xvfb ||
             (workerVncEnabled && !runtime.processes.vnc) ||
-            !runtime.processes.chromium ||
+            (sourceType === 'browser' ? !runtime.processes.chromium : !runtime.processes.terminal) ||
             !runtime.processes.ffmpeg ||
             runtime.processes.xvfb.killed ||
             (workerVncEnabled && Boolean(runtime.processes.vnc?.killed)) ||
-            runtime.processes.chromium.killed ||
+            (sourceType === 'browser'
+              ? Boolean(runtime.processes.chromium?.killed)
+              : Boolean(runtime.processes.terminal?.killed)) ||
             runtime.processes.ffmpeg.killed
           : !runtime.processes.ffmpeg || runtime.processes.ffmpeg.killed;
 
@@ -250,7 +254,7 @@ class JobWorkerService {
     let inputArgs: string[];
     let inputEnv: Record<string, string> = {};
 
-    if (job.inputSourceType === 'browser') {
+    if (job.inputSourceType === 'browser' || job.inputSourceType === 'ssh_terminal') {
       runtime.processes.xvfb = this.spawnProcess(
         runtime,
         'xvfb',
@@ -290,30 +294,62 @@ class JobWorkerService {
 
       await this.sleep(500);
 
-      runtime.processes.chromium = this.spawnProcess(
-        runtime,
-        'chromium',
-        'chromium',
-        [
-          `--remote-debugging-port=${runtime.debugPort}`,
-          `--user-data-dir=/tmp/noc-chrome-${runtime.jobId}`,
-          `--window-size=${runtime.captureWidth},${runtime.captureHeight}`,
-          '--window-position=0,0',
-          '--kiosk',
-          '--no-sandbox',
-          '--disable-dev-shm-usage',
-          '--no-first-run',
-          '--disable-session-crashed-bubble',
-          '--disable-infobars',
-          'about:blank'
-        ],
-        { DISPLAY: `:${runtime.displayNum}` }
-      );
-      await this.waitProcessHealthy(runtime.processes.chromium, START_TIMEOUT_CHROMIUM_MS, 'chromium');
-      await this.ensureBrowserTabs(runtime, job);
-      await this.restoreCookies(runtime);
-      await this.refreshAllTabs(runtime, job, true);
-      await this.activateCurrentUrl(runtime, runtime.currentUrlId);
+      if (job.inputSourceType === 'browser') {
+        runtime.processes.chromium = this.spawnProcess(
+          runtime,
+          'chromium',
+          'chromium',
+          [
+            `--remote-debugging-port=${runtime.debugPort}`,
+            `--user-data-dir=/tmp/noc-chrome-${runtime.jobId}`,
+            `--window-size=${runtime.captureWidth},${runtime.captureHeight}`,
+            '--window-position=0,0',
+            '--kiosk',
+            '--no-sandbox',
+            '--disable-dev-shm-usage',
+            '--no-first-run',
+            '--disable-session-crashed-bubble',
+            '--disable-infobars',
+            'about:blank'
+          ],
+          { DISPLAY: `:${runtime.displayNum}` }
+        );
+        await this.waitProcessHealthy(runtime.processes.chromium, START_TIMEOUT_CHROMIUM_MS, 'chromium');
+        await this.ensureBrowserTabs(runtime, job);
+        await this.restoreCookies(runtime);
+        await this.refreshAllTabs(runtime, job, true);
+        await this.activateCurrentUrl(runtime, runtime.currentUrlId);
+      } else {
+        const cols = Math.max(80, Math.floor(runtime.captureWidth / 8));
+        const rows = Math.max(24, Math.floor(runtime.captureHeight / 16));
+        const bgColor = (job.terminalBgColor ?? '#000000').trim() || '#000000';
+        const fgColor = (job.terminalFgColor ?? '#ffffff').trim() || '#ffffff';
+        runtime.processes.terminal = this.spawnProcess(
+          runtime,
+          'terminal',
+          'xterm',
+          [
+            '-fa',
+            'monospace',
+            '-fs',
+            '14',
+            '-bg',
+            bgColor,
+            '-fg',
+            fgColor,
+            '-geometry',
+            `${cols}x${rows}+0+0`,
+            '-title',
+            `NOC SSH Terminal #${runtime.jobId}`,
+            '-e',
+            'bash',
+            '-l'
+          ],
+          { DISPLAY: `:${runtime.displayNum}` }
+        );
+        await this.waitProcessHealthy(runtime.processes.terminal, START_TIMEOUT_CHROMIUM_MS, 'terminal');
+        await this.log(runtime.jobId, 'info', 'worker', `ssh terminal source: interactive shell ready (bg=${bgColor}, fg=${fgColor})`);
+      }
 
       await this.sleep(700);
       inputArgs = [
@@ -390,6 +426,7 @@ class JobWorkerService {
 
     const procs: ChildProcessWithoutNullStreams[] = [];
     if (runtime.processes.ffmpeg) procs.push(runtime.processes.ffmpeg);
+    if (runtime.processes.terminal) procs.push(runtime.processes.terminal);
     if (runtime.processes.chromium) procs.push(runtime.processes.chromium);
     if (runtime.processes.vnc) procs.push(runtime.processes.vnc);
     if (runtime.processes.xvfb) procs.push(runtime.processes.xvfb);
@@ -818,9 +855,12 @@ class JobWorkerService {
     if (runtime.mode === 'mock') {
       return Boolean(runtime.refreshTimer);
     }
-    const browserMode = (runtime.currentInputSourceType ?? 'browser') === 'browser';
-    if (browserMode) {
+    const sourceType = runtime.currentInputSourceType ?? 'browser';
+    if (sourceType === 'browser') {
       return Boolean(runtime.processes.xvfb && runtime.processes.chromium && runtime.processes.ffmpeg);
+    }
+    if (sourceType === 'ssh_terminal') {
+      return Boolean(runtime.processes.xvfb && runtime.processes.terminal && runtime.processes.ffmpeg);
     }
     return Boolean(runtime.processes.ffmpeg);
   }

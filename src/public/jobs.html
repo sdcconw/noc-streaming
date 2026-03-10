@@ -116,9 +116,12 @@
               </div>
               <div class="tab-pane fade" id="create-tab-source" role="tabpanel">
                 <div class="row g-3">
-                  <div class="col-md-4"><label class="form-label">入力ソース</label><select name="input_source_type" class="form-select"><option value="browser">Browser</option><option value="test_pattern">Test Pattern</option></select></div>
+                  <div class="col-md-4"><label class="form-label">入力ソース</label><select name="input_source_type" class="form-select"><option value="browser">Browser</option><option value="test_pattern">Test Pattern</option><option value="ssh_terminal">SSH Terminal</option></select></div>
                   <div class="col-md-4"><label class="form-label">テストパターン</label><select name="test_pattern_type" class="form-select"><option value="testsrc2">testsrc2</option><option value="smptebars">smptebars</option><option value="testsrc">testsrc</option><option value="color">color</option></select></div>
                   <div class="col-md-4"><label class="form-label">テストパラメータ</label><input name="test_pattern_params" class="form-control" placeholder="例: duration=0" /></div>
+                  <div class="col-md-3"><label class="form-label">端末背景色</label><input name="terminal_bg_color" type="color" class="form-control form-control-color" value="#000000" /></div>
+                  <div class="col-md-3"><label class="form-label">端末文字色</label><input name="terminal_fg_color" type="color" class="form-control form-control-color" value="#ffffff" /></div>
+                  <div class="col-12"><div class="form-text">SSH Terminal 選択時は空のターミナルを起動します。接続先への `ssh ...` 入力は VNC/noVNC から実施してください。</div></div>
                   <div class="col-md-4"><label class="form-label">画面切替間隔(sec)</label><input name="refresh_interval_sec" type="number" class="form-control" value="30" min="10" required /></div>
                   <div class="col-12">
                     <label class="form-label">表示URL (1行: URL,PRIORITY,URL_REFRESH_SEC / 複数行対応)</label>
@@ -189,9 +192,12 @@
               </div>
               <div class="tab-pane fade" id="edit-tab-source" role="tabpanel">
                 <div class="row g-3">
-                  <div class="col-md-4"><label class="form-label">入力ソース</label><select name="input_source_type" class="form-select"><option value="browser">Browser</option><option value="test_pattern">Test Pattern</option></select></div>
+                  <div class="col-md-4"><label class="form-label">入力ソース</label><select name="input_source_type" class="form-select"><option value="browser">Browser</option><option value="test_pattern">Test Pattern</option><option value="ssh_terminal">SSH Terminal</option></select></div>
                   <div class="col-md-4"><label class="form-label">テストパターン</label><select name="test_pattern_type" class="form-select"><option value="testsrc2">testsrc2</option><option value="smptebars">smptebars</option><option value="testsrc">testsrc</option><option value="color">color</option></select></div>
                   <div class="col-md-4"><label class="form-label">テストパラメータ</label><input name="test_pattern_params" class="form-control" placeholder="例: duration=0" /></div>
+                  <div class="col-md-3"><label class="form-label">端末背景色</label><input name="terminal_bg_color" type="color" class="form-control form-control-color" value="#000000" /></div>
+                  <div class="col-md-3"><label class="form-label">端末文字色</label><input name="terminal_fg_color" type="color" class="form-control form-control-color" value="#ffffff" /></div>
+                  <div class="col-12"><div class="form-text">SSH Terminal 選択時は空のターミナルを起動します。接続先への `ssh ...` 入力は VNC/noVNC から実施してください。</div></div>
                   <div class="col-md-4"><label class="form-label">画面切替間隔(sec)</label><input name="refresh_interval_sec" type="number" class="form-control" min="10" required /></div>
                   <div class="col-12">
                     <label class="form-label">表示URL (1行: URL,PRIORITY,URL_REFRESH_SEC / 複数行対応)</label>

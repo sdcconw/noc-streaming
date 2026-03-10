@@ -290,6 +290,8 @@ async function initJobsPage() {
         input_source_type: String(fd.get('input_source_type') || 'browser'),
         test_pattern_type: String(fd.get('test_pattern_type') || ''),
         test_pattern_params: String(fd.get('test_pattern_params') || ''),
+        terminal_bg_color: String(fd.get('terminal_bg_color') || '#000000'),
+        terminal_fg_color: String(fd.get('terminal_fg_color') || '#ffffff'),
         overlay_enabled: fd.get('overlay_enabled') !== null,
         overlay_message: String(fd.get('overlay_message') || ''),
         overlay_position: String(fd.get('overlay_position') || 'top_left'),
@@ -353,6 +355,8 @@ async function initJobsPage() {
         form.input_source_type.value = job.input_source_type || 'browser';
         form.test_pattern_type.value = job.test_pattern_type || 'testsrc2';
         form.test_pattern_params.value = job.test_pattern_params || '';
+        form.terminal_bg_color.value = job.terminal_bg_color || '#000000';
+        form.terminal_fg_color.value = job.terminal_fg_color || '#ffffff';
         form.overlay_enabled.checked = Boolean(job.overlay_enabled);
         form.overlay_message.value = job.overlay_message || '';
         form.overlay_position.value = job.overlay_position || 'top_left';
@@ -417,6 +421,8 @@ async function initJobsPage() {
         input_source_type: String(fd.get('input_source_type') || 'browser'),
         test_pattern_type: String(fd.get('test_pattern_type') || ''),
         test_pattern_params: String(fd.get('test_pattern_params') || ''),
+        terminal_bg_color: String(fd.get('terminal_bg_color') || '#000000'),
+        terminal_fg_color: String(fd.get('terminal_fg_color') || '#ffffff'),
         overlay_enabled: fd.get('overlay_enabled') !== null,
         overlay_message: String(fd.get('overlay_message') || ''),
         overlay_position: String(fd.get('overlay_position') || 'top_left'),

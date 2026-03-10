@@ -8,6 +8,7 @@ Node.js 24 + MySQL 8.4 + Prisma + OpenAPI(Swagger) 構成です。
 - ジョブ作成/編集/削除、開始/停止/再起動
 - Browser入力（Xvfb + Chromium + x11grab）
 - Test Pattern入力（lavfi）
+- SSH Terminal入力（Xvfb + xterm + x11grab、背景色/文字色設定可、接続操作はVNC/noVNCから手入力）
 - URL複数設定とローテーション表示（`priority` + `refresh_interval_sec`）
 - 配信先: RTMP / SRT
 - オーバーレイ表示（`YYYY/MM/DD hh:mm:ss {message}`、4隅、文字サイズ）
@@ -87,14 +88,14 @@ curl -sS -b /tmp/noc.cookie -X POST http://localhost:3000/api/jobs/1/restart \
 
 WebUIでは1行1URLで以下形式です。
 
-- `URL,PRIORITY,REFRESH_SEC`
+- `URL,PRIORITY,URL_REFRESH_SEC`
 - 例: `https://example.local/dashboard,1,60`
 
 動作:
 
 - `priority` 昇順（同値は登録順）で並び替え
-- 複数URL: 現在URLの `REFRESH_SEC` 経過で次URLへ遷移
-- 単一URL: `REFRESH_SEC` ごとに同一URLをリロード
+- 複数URL: ジョブの `refresh_interval_sec`（画面切替間隔）で次URLへ遷移
+- URLごと: `URL_REFRESH_SEC` ごとに再読込（`0` は再読込しない）
 
 ## 環境変数
 

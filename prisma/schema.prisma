@@ -24,6 +24,7 @@ enum StreamProtocol {
 enum InputSourceType {
   browser
   test_pattern
+  ssh_terminal
 }
 
 enum AuthSource {
@@ -53,6 +54,9 @@ model Job {
   inputSourceType     InputSourceType @default(browser) @map("input_source_type")
   testPatternType     String?        @map("test_pattern_type") @db.VarChar(32)
   testPatternParams   String?        @map("test_pattern_params") @db.Text
+  sshCommand          String?        @map("ssh_command") @db.Text
+  terminalBgColor     String         @default("#000000") @map("terminal_bg_color") @db.VarChar(32)
+  terminalFgColor     String         @default("#ffffff") @map("terminal_fg_color") @db.VarChar(32)
   overlayEnabled      Boolean        @default(false) @map("overlay_enabled")
   overlayMessage      String         @default("") @map("overlay_message") @db.VarChar(255)
   overlayPosition     String         @default("top_left") @map("overlay_position") @db.VarChar(16)

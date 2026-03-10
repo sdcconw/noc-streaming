@@ -6,6 +6,8 @@ RUN apt-get update -y \
   && apt-get install -y --no-install-recommends \
     openssl \
     ffmpeg \
+    openssh-client \
+    xterm \
     xvfb \
     x11vnc \
     chromium \

@@ -40,9 +40,12 @@ const createJobSchema = z.object({
   protocol: z.enum(['rtmp', 'srt']),
   output_url: z.string().min(1),
   stream_key: z.string().default(''),
-  input_source_type: z.enum(['browser', 'test_pattern']).default('browser'),
+  input_source_type: z.enum(['browser', 'test_pattern', 'ssh_terminal']).default('browser'),
   test_pattern_type: z.string().min(1).max(32).optional().nullable(),
   test_pattern_params: z.string().max(1024).optional().nullable(),
+  ssh_command: z.string().max(2048).optional().nullable(),
+  terminal_bg_color: z.string().min(1).max(32).default('#000000'),
+  terminal_fg_color: z.string().min(1).max(32).default('#ffffff'),
   overlay_enabled: z.boolean().default(false),
   overlay_message: z.string().max(255).default(''),
   overlay_position: z.enum(['top_left', 'top_right', 'bottom_left', 'bottom_right']).default('top_left'),
@@ -107,9 +110,12 @@ function mapJob(job: {
   preset: string;
   protocol: 'rtmp' | 'srt';
   outputUrl: string;
-  inputSourceType: 'browser' | 'test_pattern';
+  inputSourceType: 'browser' | 'test_pattern' | 'ssh_terminal';
   testPatternType: string | null;
   testPatternParams: string | null;
+  sshCommand: string | null;
+  terminalBgColor: string;
+  terminalFgColor: string;
   overlayEnabled: boolean;
   overlayMessage: string;
   overlayPosition: string;
@@ -136,20 +142,32 @@ function mapJob(job: {
     input_source_type: job.inputSourceType,
     test_pattern_type: job.testPatternType,
     test_pattern_params: job.testPatternParams,
+    ssh_command: job.sshCommand,
+    terminal_bg_color: job.terminalBgColor,
+    terminal_fg_color: job.terminalFgColor,
     overlay_enabled: job.overlayEnabled,
     overlay_message: job.overlayMessage,
     overlay_position: job.overlayPosition,
     overlay_font_size_px: job.overlayFontSizePx,
-    vnc_enabled: vncEnabled && job.inputSourceType === 'browser',
-    vnc_port: vncEnabled && job.inputSourceType === 'browser' ? calcVncPort(job.id) : null,
-    vnc_host: vncEnabled && job.inputSourceType === 'browser' ? vncPublicHost : null,
+    vnc_enabled: vncEnabled && (job.inputSourceType === 'browser' || job.inputSourceType === 'ssh_terminal'),
+    vnc_port:
+      vncEnabled && (job.inputSourceType === 'browser' || job.inputSourceType === 'ssh_terminal')
+        ? calcVncPort(job.id)
+        : null,
+    vnc_host:
+      vncEnabled && (job.inputSourceType === 'browser' || job.inputSourceType === 'ssh_terminal')
+        ? vncPublicHost
+        : null,
     vnc_url:
-      vncEnabled && job.inputSourceType === 'browser'
+      vncEnabled && (job.inputSourceType === 'browser' || job.inputSourceType === 'ssh_terminal')
         ? `vnc://${vncPublicHost}:${calcVncPort(job.id)}`
         : null,
-    novnc_enabled: vncEnabled && novncEnabled && job.inputSourceType === 'browser',
+    novnc_enabled:
+      vncEnabled && novncEnabled && (job.inputSourceType === 'browser' || job.inputSourceType === 'ssh_terminal'),
     novnc_url:
-      vncEnabled && novncEnabled && job.inputSourceType === 'browser' ? buildNoVncUrl(job.id) : null,
+      vncEnabled && novncEnabled && (job.inputSourceType === 'browser' || job.inputSourceType === 'ssh_terminal')
+        ? buildNoVncUrl(job.id)
+        : null,
     srt_latency_ms: job.srtLatencyMs,
     srt_mode: job.srtMode,
     refresh_interval_sec: job.refreshIntervalSec,
@@ -215,6 +233,9 @@ jobsRouter.post('/api/jobs', roleAdminOnly, async (req, res, next) => {
         inputSourceType: body.input_source_type,
         testPatternType: body.test_pattern_type || null,
         testPatternParams: body.test_pattern_params || null,
+        sshCommand: body.ssh_command || null,
+        terminalBgColor: body.terminal_bg_color,
+        terminalFgColor: body.terminal_fg_color,
         overlayEnabled: body.overlay_enabled,
         overlayMessage: body.overlay_message,
         overlayPosition: body.overlay_position,
@@ -383,6 +404,9 @@ jobsRouter.put('/api/jobs/:id', roleOperatorOrAbove, async (req, res, next) => {
         testPatternType: body.test_pattern_type === undefined ? undefined : body.test_pattern_type || null,
         testPatternParams:
           body.test_pattern_params === undefined ? undefined : body.test_pattern_params || null,
+        sshCommand: body.ssh_command === undefined ? undefined : body.ssh_command || null,
+        terminalBgColor: body.terminal_bg_color,
+        terminalFgColor: body.terminal_fg_color,
         overlayEnabled: body.overlay_enabled,
         overlayMessage: body.overlay_message,
         overlayPosition: body.overlay_position,

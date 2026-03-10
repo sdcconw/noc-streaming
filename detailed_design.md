@@ -103,6 +103,14 @@ Docker Composeサービス:
 
 - FFmpeg `lavfi` を入力源として配信
 
+### 6.2b SSH Terminal入力
+
+- Xvfb上に `xterm` を起動
+- 起動時はログインシェルのみを表示
+- `terminal_bg_color` / `terminal_fg_color` を `xterm` の `-bg` / `-fg` に反映
+- 画面は既存の `x11grab` で配信
+- SSH接続先コマンドや認証入力はVNC/noVNC経由で利用者が実施
+
 ### 6.3 URLローテーション
 
 - `priority` 昇順でURL配列を決定
