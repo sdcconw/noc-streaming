@@ -223,9 +223,13 @@ class JobWorkerService {
     runtime.currentUrl = current?.url ?? 'about:blank';
     runtime.currentUrlId = current?.id;
     runtime.switchIntervalSec = Math.max(job.refreshIntervalSec ?? MIN_REFRESH_SEC, MIN_REFRESH_SEC);
+    const positiveUrlSecs = job.urls
+      .map((u) => u.refreshIntervalSec)
+      .filter((sec) => sec > 0)
+      .map((sec) => Math.max(sec, MIN_REFRESH_SEC));
     runtime.currentRefreshIntervalSec = Math.max(
       MIN_REFRESH_SEC,
-      Math.min(runtime.switchIntervalSec, ...job.urls.map((u) => Math.max(u.refreshIntervalSec, MIN_REFRESH_SEC)))
+      Math.min(runtime.switchIntervalSec, ...(positiveUrlSecs.length ? positiveUrlSecs : [runtime.switchIntervalSec]))
     );
     runtime.lastSwitchAt = Date.now();
     if (current?.id) {
@@ -464,9 +468,13 @@ class JobWorkerService {
       await this.refreshAllTabs(runtime, job, true);
       await this.activateCurrentUrl(runtime, runtime.currentUrlId ?? urls[0]?.id);
     }
+    const positiveUrlSecs = urls
+      .map((u) => u.refreshIntervalSec)
+      .filter((sec) => sec > 0)
+      .map((sec) => Math.max(sec, MIN_REFRESH_SEC));
     const minUrlSec = Math.max(
       MIN_REFRESH_SEC,
-      Math.min(...urls.map((u) => Math.max(u.refreshIntervalSec, MIN_REFRESH_SEC)))
+      Math.min(...(positiveUrlSecs.length ? positiveUrlSecs : [switchSec]))
     );
     const tickSec = Math.max(MIN_REFRESH_SEC, Math.min(switchSec, minUrlSec));
     if (runtime.currentRefreshIntervalSec !== tickSec) {
@@ -475,6 +483,7 @@ class JobWorkerService {
 
     const now = Date.now();
     for (const entry of urls) {
+      if (entry.refreshIntervalSec === 0) continue;
       const reloadSec = Math.max(entry.refreshIntervalSec, MIN_REFRESH_SEC);
       const lastReloadAt = runtime.urlLastReloadAt.get(entry.id) ?? 0;
       if (now - lastReloadAt < reloadSec * 1000) continue;
@@ -499,7 +508,7 @@ class JobWorkerService {
         jobId,
         'info',
         'scheduler',
-        `url rotate -> ${next.url} (switch=${switchSec}s, url_refresh=${Math.max(next.refreshIntervalSec, MIN_REFRESH_SEC)}s)`
+        `url rotate -> ${next.url} (switch=${switchSec}s, url_refresh=${next.refreshIntervalSec === 0 ? 'disabled' : `${Math.max(next.refreshIntervalSec, MIN_REFRESH_SEC)}s`})`
       );
       runtime.currentUrl = next.url;
       runtime.currentUrlId = next.id;
