@@ -57,6 +57,9 @@ model Job {
   sshCommand          String?        @map("ssh_command") @db.Text
   terminalBgColor     String         @default("#000000") @map("terminal_bg_color") @db.VarChar(32)
   terminalFgColor     String         @default("#ffffff") @map("terminal_fg_color") @db.VarChar(32)
+  terminalFontSizePx  Int            @default(14) @map("terminal_font_size_px") @db.UnsignedInt
+  terminalCols        Int?           @map("terminal_cols") @db.UnsignedInt
+  terminalRows        Int?           @map("terminal_rows") @db.UnsignedInt
   overlayEnabled      Boolean        @default(false) @map("overlay_enabled")
   overlayMessage      String         @default("") @map("overlay_message") @db.VarChar(255)
   overlayPosition     String         @default("top_left") @map("overlay_position") @db.VarChar(16)

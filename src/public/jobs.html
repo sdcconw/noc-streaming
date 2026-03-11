@@ -121,7 +121,11 @@
                   <div class="col-md-4"><label class="form-label">テストパラメータ</label><input name="test_pattern_params" class="form-control" placeholder="例: duration=0" /></div>
                   <div class="col-md-3"><label class="form-label">端末背景色</label><input name="terminal_bg_color" type="color" class="form-control form-control-color" value="#000000" /></div>
                   <div class="col-md-3"><label class="form-label">端末文字色</label><input name="terminal_fg_color" type="color" class="form-control form-control-color" value="#ffffff" /></div>
+                  <div class="col-md-3"><label class="form-label">端末文字サイズ(px)</label><input name="terminal_font_size_px" type="number" class="form-control" value="14" min="8" max="72" /></div>
+                  <div class="col-md-3"><label class="form-label">端末列数(任意)</label><input name="terminal_cols" type="number" class="form-control" min="40" max="400" placeholder="自動" /></div>
+                  <div class="col-md-3"><label class="form-label">端末行数(任意)</label><input name="terminal_rows" type="number" class="form-control" min="10" max="200" placeholder="自動" /></div>
                   <div class="col-12"><div class="form-text">SSH Terminal 選択時は空のターミナルを起動します。接続先への `ssh ...` 入力は VNC/noVNC から実施してください。</div></div>
+                  <div class="col-12"><div class="form-text">全画面CUIアプリがはみ出す場合は、端末文字サイズを下げるか、端末列数・行数を明示指定してください。</div></div>
                   <div class="col-md-4"><label class="form-label">画面切替間隔(sec)</label><input name="refresh_interval_sec" type="number" class="form-control" value="30" min="10" required /></div>
                   <div class="col-12">
                     <label class="form-label">表示URL (1行: URL,PRIORITY,URL_REFRESH_SEC / 複数行対応)</label>
@@ -197,7 +201,11 @@
                   <div class="col-md-4"><label class="form-label">テストパラメータ</label><input name="test_pattern_params" class="form-control" placeholder="例: duration=0" /></div>
                   <div class="col-md-3"><label class="form-label">端末背景色</label><input name="terminal_bg_color" type="color" class="form-control form-control-color" value="#000000" /></div>
                   <div class="col-md-3"><label class="form-label">端末文字色</label><input name="terminal_fg_color" type="color" class="form-control form-control-color" value="#ffffff" /></div>
+                  <div class="col-md-3"><label class="form-label">端末文字サイズ(px)</label><input name="terminal_font_size_px" type="number" class="form-control" min="8" max="72" /></div>
+                  <div class="col-md-3"><label class="form-label">端末列数(任意)</label><input name="terminal_cols" type="number" class="form-control" min="40" max="400" placeholder="自動" /></div>
+                  <div class="col-md-3"><label class="form-label">端末行数(任意)</label><input name="terminal_rows" type="number" class="form-control" min="10" max="200" placeholder="自動" /></div>
                   <div class="col-12"><div class="form-text">SSH Terminal 選択時は空のターミナルを起動します。接続先への `ssh ...` 入力は VNC/noVNC から実施してください。</div></div>
+                  <div class="col-12"><div class="form-text">全画面CUIアプリがはみ出す場合は、端末文字サイズを下げるか、端末列数・行数を明示指定してください。</div></div>
                   <div class="col-md-4"><label class="form-label">画面切替間隔(sec)</label><input name="refresh_interval_sec" type="number" class="form-control" min="10" required /></div>
                   <div class="col-12">
                     <label class="form-label">表示URL (1行: URL,PRIORITY,URL_REFRESH_SEC / 複数行対応)</label>

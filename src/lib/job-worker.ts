@@ -67,6 +67,17 @@ const START_TIMEOUT_CHROMIUM_MS = 30_000;
 const START_TIMEOUT_FFMPEG_MS = 20_000;
 const URL_SWITCH_TIMEOUT_MS = 10_000;
 const MIN_REFRESH_SEC = 10;
+const DEFAULT_TERMINAL_FONT_SIZE_PX = 14;
+
+// xtermのフォントサイズから概算セル幅を求める。
+function estimateTerminalCellWidth(fontSizePx: number): number {
+  return Math.max(7, Math.round(fontSizePx * 0.62));
+}
+
+// xtermのフォントサイズから概算セル高さを求める。
+function estimateTerminalCellHeight(fontSizePx: number): number {
+  return Math.max(14, Math.round(fontSizePx * 1.25));
+}
 
 class JobWorkerService {
   private runtimes = new Map<bigint, JobRuntime>();
@@ -320,10 +331,15 @@ class JobWorkerService {
         await this.refreshAllTabs(runtime, job, true);
         await this.activateCurrentUrl(runtime, runtime.currentUrlId);
       } else {
-        const cols = Math.max(80, Math.floor(runtime.captureWidth / 8));
-        const rows = Math.max(24, Math.floor(runtime.captureHeight / 16));
         const bgColor = (job.terminalBgColor ?? '#000000').trim() || '#000000';
         const fgColor = (job.terminalFgColor ?? '#ffffff').trim() || '#ffffff';
+        const fontSizePx = Math.max(8, job.terminalFontSizePx ?? DEFAULT_TERMINAL_FONT_SIZE_PX);
+        const cellWidth = estimateTerminalCellWidth(fontSizePx);
+        const cellHeight = estimateTerminalCellHeight(fontSizePx);
+        const autoCols = Math.max(80, Math.floor(Math.max(200, runtime.captureWidth - 12) / cellWidth));
+        const autoRows = Math.max(24, Math.floor(Math.max(120, runtime.captureHeight - 12) / cellHeight));
+        const cols = job.terminalCols && job.terminalCols > 0 ? job.terminalCols : autoCols;
+        const rows = job.terminalRows && job.terminalRows > 0 ? job.terminalRows : autoRows;
         runtime.processes.terminal = this.spawnProcess(
           runtime,
           'terminal',
@@ -332,7 +348,7 @@ class JobWorkerService {
             '-fa',
             'monospace',
             '-fs',
-            '14',
+            String(fontSizePx),
             '-bg',
             bgColor,
             '-fg',
@@ -343,12 +359,18 @@ class JobWorkerService {
             `NOC SSH Terminal #${runtime.jobId}`,
             '-e',
             'bash',
-            '-l'
+            '-lc',
+            `stty cols ${cols} rows ${rows}; exec bash -l`
           ],
           { DISPLAY: `:${runtime.displayNum}` }
         );
         await this.waitProcessHealthy(runtime.processes.terminal, START_TIMEOUT_CHROMIUM_MS, 'terminal');
-        await this.log(runtime.jobId, 'info', 'worker', `ssh terminal source: interactive shell ready (bg=${bgColor}, fg=${fgColor})`);
+        await this.log(
+          runtime.jobId,
+          'info',
+          'worker',
+          `ssh terminal source: interactive shell ready (bg=${bgColor}, fg=${fgColor}, fs=${fontSizePx}, cols=${cols}, rows=${rows})`
+        );
       }
 
       await this.sleep(700);

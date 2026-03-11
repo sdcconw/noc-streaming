@@ -46,6 +46,9 @@ const createJobSchema = z.object({
   ssh_command: z.string().max(2048).optional().nullable(),
   terminal_bg_color: z.string().min(1).max(32).default('#000000'),
   terminal_fg_color: z.string().min(1).max(32).default('#ffffff'),
+  terminal_font_size_px: z.number().int().min(8).max(72).default(14),
+  terminal_cols: z.number().int().min(40).max(400).optional().nullable(),
+  terminal_rows: z.number().int().min(10).max(200).optional().nullable(),
   overlay_enabled: z.boolean().default(false),
   overlay_message: z.string().max(255).default(''),
   overlay_position: z.enum(['top_left', 'top_right', 'bottom_left', 'bottom_right']).default('top_left'),
@@ -116,6 +119,9 @@ function mapJob(job: {
   sshCommand: string | null;
   terminalBgColor: string;
   terminalFgColor: string;
+  terminalFontSizePx: number;
+  terminalCols: number | null;
+  terminalRows: number | null;
   overlayEnabled: boolean;
   overlayMessage: string;
   overlayPosition: string;
@@ -145,6 +151,9 @@ function mapJob(job: {
     ssh_command: job.sshCommand,
     terminal_bg_color: job.terminalBgColor,
     terminal_fg_color: job.terminalFgColor,
+    terminal_font_size_px: job.terminalFontSizePx,
+    terminal_cols: job.terminalCols,
+    terminal_rows: job.terminalRows,
     overlay_enabled: job.overlayEnabled,
     overlay_message: job.overlayMessage,
     overlay_position: job.overlayPosition,
@@ -236,6 +245,9 @@ jobsRouter.post('/api/jobs', roleAdminOnly, async (req, res, next) => {
         sshCommand: body.ssh_command || null,
         terminalBgColor: body.terminal_bg_color,
         terminalFgColor: body.terminal_fg_color,
+        terminalFontSizePx: body.terminal_font_size_px,
+        terminalCols: body.terminal_cols,
+        terminalRows: body.terminal_rows,
         overlayEnabled: body.overlay_enabled,
         overlayMessage: body.overlay_message,
         overlayPosition: body.overlay_position,
@@ -407,6 +419,9 @@ jobsRouter.put('/api/jobs/:id', roleOperatorOrAbove, async (req, res, next) => {
         sshCommand: body.ssh_command === undefined ? undefined : body.ssh_command || null,
         terminalBgColor: body.terminal_bg_color,
         terminalFgColor: body.terminal_fg_color,
+        terminalFontSizePx: body.terminal_font_size_px,
+        terminalCols: body.terminal_cols,
+        terminalRows: body.terminal_rows,
         overlayEnabled: body.overlay_enabled,
         overlayMessage: body.overlay_message,
         overlayPosition: body.overlay_position,

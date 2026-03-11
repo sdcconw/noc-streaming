@@ -64,6 +64,14 @@ function getCookieValue(name) {
   return '';
 }
 
+// 空欄を許容する数値入力を `number | null` へ変換する。
+function parseOptionalNumber(value) {
+  const text = String(value ?? '').trim();
+  if (!text) return null;
+  const num = Number(text);
+  return Number.isFinite(num) ? num : null;
+}
+
 // API呼び出し共通処理（CSRF付与・エラーハンドリング）を行う。
 async function api(path, options = {}) {
   const method = String(options.method || 'GET').toUpperCase();
@@ -292,6 +300,9 @@ async function initJobsPage() {
         test_pattern_params: String(fd.get('test_pattern_params') || ''),
         terminal_bg_color: String(fd.get('terminal_bg_color') || '#000000'),
         terminal_fg_color: String(fd.get('terminal_fg_color') || '#ffffff'),
+        terminal_font_size_px: Number(fd.get('terminal_font_size_px') || 14),
+        terminal_cols: parseOptionalNumber(fd.get('terminal_cols')),
+        terminal_rows: parseOptionalNumber(fd.get('terminal_rows')),
         overlay_enabled: fd.get('overlay_enabled') !== null,
         overlay_message: String(fd.get('overlay_message') || ''),
         overlay_position: String(fd.get('overlay_position') || 'top_left'),
@@ -357,6 +368,9 @@ async function initJobsPage() {
         form.test_pattern_params.value = job.test_pattern_params || '';
         form.terminal_bg_color.value = job.terminal_bg_color || '#000000';
         form.terminal_fg_color.value = job.terminal_fg_color || '#ffffff';
+        form.terminal_font_size_px.value = String(job.terminal_font_size_px || 14);
+        form.terminal_cols.value = job.terminal_cols == null ? '' : String(job.terminal_cols);
+        form.terminal_rows.value = job.terminal_rows == null ? '' : String(job.terminal_rows);
         form.overlay_enabled.checked = Boolean(job.overlay_enabled);
         form.overlay_message.value = job.overlay_message || '';
         form.overlay_position.value = job.overlay_position || 'top_left';
@@ -423,6 +437,9 @@ async function initJobsPage() {
         test_pattern_params: String(fd.get('test_pattern_params') || ''),
         terminal_bg_color: String(fd.get('terminal_bg_color') || '#000000'),
         terminal_fg_color: String(fd.get('terminal_fg_color') || '#ffffff'),
+        terminal_font_size_px: Number(fd.get('terminal_font_size_px') || 14),
+        terminal_cols: parseOptionalNumber(fd.get('terminal_cols')),
+        terminal_rows: parseOptionalNumber(fd.get('terminal_rows')),
         overlay_enabled: fd.get('overlay_enabled') !== null,
         overlay_message: String(fd.get('overlay_message') || ''),
         overlay_position: String(fd.get('overlay_position') || 'top_left'),
