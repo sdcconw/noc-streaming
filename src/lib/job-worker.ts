@@ -55,6 +55,7 @@ type JobRuntime = {
 };
 
 type JobWithUrls = Job & { urls: JobUrl[] };
+type RecoveryMode = 'full' | 'output_only';
 
 const workerMode = (process.env.WORKER_MODE ?? 'mock') as WorkerMode;
 const monitorIntervalMs = Number(process.env.WORKER_MONITOR_INTERVAL_MS ?? 5000);
@@ -177,7 +178,17 @@ class JobWorkerService {
           : !runtime.processes.ffmpeg || runtime.processes.ffmpeg.killed;
 
         if (missing) {
-          await this.handleFailure(runtime, 'process health check detected failure');
+          const outputOnly =
+            interactiveMode &&
+            Boolean(runtime.processes.xvfb) &&
+            (!workerVncEnabled || Boolean(runtime.processes.vnc)) &&
+            Boolean(sourceType === 'browser' ? runtime.processes.chromium : runtime.processes.terminal) &&
+            (!runtime.processes.ffmpeg || runtime.processes.ffmpeg.killed);
+          await this.handleFailure(
+            runtime,
+            'process health check detected failure',
+            outputOnly ? 'output_only' : 'full'
+          );
         }
 
         await this.collectRuntimeMetrics(runtime).catch(() => undefined);
@@ -186,7 +197,7 @@ class JobWorkerService {
   }
 
   // ジョブ障害発生時の再接続リトライ制御を行う。
-  private async handleFailure(runtime: JobRuntime, reason: string) {
+  private async handleFailure(runtime: JobRuntime, reason: string, recoveryMode: RecoveryMode = 'full') {
     if (runtime.stopping) return;
 
     const job = await this.loadJob(runtime.jobId);
@@ -195,7 +206,11 @@ class JobWorkerService {
     await this.log(runtime.jobId, 'error', 'worker', `runtime failure: ${reason}`);
 
     if (runtime.retries >= job.maxRetries) {
-      await this.stopProcesses(runtime, true);
+      if (recoveryMode === 'output_only') {
+        await this.stopOutputProcess(runtime, true);
+      } else {
+        await this.stopProcesses(runtime, true);
+      }
       await this.updateStatus(runtime.jobId, JobStatus.ERROR);
       await this.log(runtime.jobId, 'error', 'worker', 'retry exhausted, moved to ERROR');
       return;
@@ -203,14 +218,18 @@ class JobWorkerService {
 
     runtime.retries += 1;
     await this.updateStatus(runtime.jobId, JobStatus.RECONNECTING);
-    await this.stopProcesses(runtime, true);
+    if (recoveryMode === 'output_only') {
+      await this.stopOutputProcess(runtime, true);
+    } else {
+      await this.stopProcesses(runtime, true);
+    }
 
     const waitMs = job.retryIntervalSec * 1000;
     await this.log(
       runtime.jobId,
       'warn',
       'worker',
-      `reconnecting in ${job.retryIntervalSec}s (${runtime.retries}/${job.maxRetries})`
+      `reconnecting in ${job.retryIntervalSec}s (${runtime.retries}/${job.maxRetries}) [mode=${recoveryMode}]`
     );
 
     runtime.reconnectTimer = setTimeout(() => {
@@ -220,12 +239,16 @@ class JobWorkerService {
 
         try {
           await this.updateStatus(runtime.jobId, JobStatus.STARTING);
-          await this.startPipeline(runtime, latest);
+          if (recoveryMode === 'output_only') {
+            await this.startOutputProcess(runtime, latest);
+          } else {
+            await this.startPipeline(runtime, latest);
+          }
           await this.updateStatus(runtime.jobId, JobStatus.RUNNING);
           await this.log(runtime.jobId, 'info', 'worker', 'reconnect succeeded');
         } catch (err) {
           await this.log(runtime.jobId, 'error', 'worker', `reconnect failed: ${String(err)}`);
-          await this.handleFailure(runtime, 'reconnect attempt failed');
+          await this.handleFailure(runtime, 'reconnect attempt failed', recoveryMode);
         }
       });
     }, waitMs);
@@ -263,9 +286,6 @@ class JobWorkerService {
       this.startTimers(runtime, job.id, runtime.currentRefreshIntervalSec);
       return;
     }
-
-    let inputArgs: string[];
-    let inputEnv: Record<string, string> = {};
 
     if (job.inputSourceType === 'browser' || job.inputSourceType === 'ssh_terminal') {
       await this.cleanupStaleSharedMemory(runtime.jobId, 'before_start');
@@ -378,68 +398,9 @@ class JobWorkerService {
           `ssh terminal source: interactive shell ready (bg=${bgColor}, fg=${fgColor}, fs=${fontSizePx}, cols=${cols}, rows=${rows})`
         );
       }
-
-      await this.sleep(700);
-      inputArgs = [
-        '-f',
-        'x11grab',
-        '-draw_mouse',
-        '0',
-        '-video_size',
-        `${job.resolutionWidth}x${job.resolutionHeight}`,
-        '-framerate',
-        String(job.fps),
-        '-i',
-        `:${runtime.displayNum}.0`
-      ];
-      inputEnv = { DISPLAY: `:${runtime.displayNum}` };
-    } else {
-      const patternType = (job.testPatternType ?? 'testsrc2').trim() || 'testsrc2';
-      const params = (job.testPatternParams ?? '').trim();
-      const basePattern = `${patternType}=size=${job.resolutionWidth}x${job.resolutionHeight}:rate=${job.fps}`;
-      const pattern = params ? `${basePattern}:${params.replace(/^:+/, '')}` : basePattern;
-      inputArgs = ['-re', '-f', 'lavfi', '-i', pattern];
-      await this.log(runtime.jobId, 'info', 'worker', `test pattern source: ${pattern}`);
     }
 
-    const target = this.buildOutputTarget(job);
-    const format = job.protocol === 'rtmp' ? 'flv' : 'mpegts';
-    const vf = this.buildVideoFilter(job);
-
-    const ffmpegArgs = [
-      ...inputArgs,
-      '-c:v',
-      job.codec,
-      '-preset',
-      job.preset,
-      '-b:v',
-      `${job.bitrateKbps}k`,
-      '-vf',
-      vf,
-      // Keep output broadly compatible with H.264 receivers.
-      '-pix_fmt',
-      'yuv420p',
-      '-g',
-      String(Math.max(job.fps * 2, 2)),
-      '-keyint_min',
-      String(Math.max(job.fps * 2, 2))
-    ];
-
-    if (job.codec === 'libx264') {
-      ffmpegArgs.push('-profile:v', 'main');
-      ffmpegArgs.push('-x264-params', 'repeat-headers=1:scenecut=0:bframes=0');
-    }
-
-    ffmpegArgs.push('-f', format, target);
-
-    runtime.processes.ffmpeg = this.spawnProcess(
-      runtime,
-      'ffmpeg',
-      'ffmpeg',
-      ffmpegArgs,
-      inputEnv
-    );
-    await this.waitProcessHealthy(runtime.processes.ffmpeg, START_TIMEOUT_FFMPEG_MS, 'ffmpeg');
+    await this.startOutputProcess(runtime, job);
 
     if (job.inputSourceType === 'browser') {
       this.startTimers(runtime, job.id, runtime.currentRefreshIntervalSec);
@@ -492,6 +453,97 @@ class JobWorkerService {
 
     await this.waitForProcessesExit(procs, 1_000);
     await this.cleanupStaleSharedMemory(runtime.jobId, forceOnly ? 'after_force_stop' : 'after_stop');
+  }
+
+  // 出力側のFFmpegのみを停止する。
+  private async stopOutputProcess(runtime: JobRuntime, forceOnly: boolean) {
+    const proc = runtime.processes.ffmpeg;
+    if (!proc) return;
+    runtime.processes.ffmpeg = undefined;
+
+    try {
+      proc.kill(forceOnly ? 'SIGKILL' : 'SIGTERM');
+    } catch {
+      // ignore
+    }
+
+    await this.waitForProcessesExit([proc], PROCESS_EXIT_WAIT_MS);
+    if (proc.exitCode === null && !proc.killed) {
+      try {
+        proc.kill('SIGKILL');
+      } catch {
+        // ignore
+      }
+    }
+    await this.waitForProcessesExit([proc], 1_000);
+  }
+
+  // 現在の入力ソースを維持したままFFmpeg出力だけを起動する。
+  private async startOutputProcess(runtime: JobRuntime, job: JobWithUrls) {
+    const { inputArgs, inputEnv } = await this.buildFfmpegInput(job, runtime);
+    const target = this.buildOutputTarget(job);
+    const format = job.protocol === 'rtmp' ? 'flv' : 'mpegts';
+    const vf = this.buildVideoFilter(job);
+
+    const ffmpegArgs = [
+      ...inputArgs,
+      '-c:v',
+      job.codec,
+      '-preset',
+      job.preset,
+      '-b:v',
+      `${job.bitrateKbps}k`,
+      '-vf',
+      vf,
+      '-pix_fmt',
+      'yuv420p',
+      '-g',
+      String(Math.max(job.fps * 2, 2)),
+      '-keyint_min',
+      String(Math.max(job.fps * 2, 2))
+    ];
+
+    if (job.codec === 'libx264') {
+      ffmpegArgs.push('-profile:v', 'main');
+      ffmpegArgs.push('-x264-params', 'repeat-headers=1:scenecut=0:bframes=0');
+    }
+
+    ffmpegArgs.push('-f', format, target);
+
+    runtime.processes.ffmpeg = this.spawnProcess(runtime, 'ffmpeg', 'ffmpeg', ffmpegArgs, inputEnv);
+    await this.waitProcessHealthy(runtime.processes.ffmpeg, START_TIMEOUT_FFMPEG_MS, 'ffmpeg');
+  }
+
+  // ジョブ入力種別に応じてFFmpeg入力引数を組み立てる。
+  private async buildFfmpegInput(job: JobWithUrls, runtime: JobRuntime) {
+    if (job.inputSourceType === 'browser' || job.inputSourceType === 'ssh_terminal') {
+      await this.sleep(700);
+      return {
+        inputArgs: [
+          '-f',
+          'x11grab',
+          '-draw_mouse',
+          '0',
+          '-video_size',
+          `${job.resolutionWidth}x${job.resolutionHeight}`,
+          '-framerate',
+          String(job.fps),
+          '-i',
+          `:${runtime.displayNum}.0`
+        ],
+        inputEnv: { DISPLAY: `:${runtime.displayNum}` }
+      };
+    }
+
+    const patternType = (job.testPatternType ?? 'testsrc2').trim() || 'testsrc2';
+    const params = (job.testPatternParams ?? '').trim();
+    const basePattern = `${patternType}=size=${job.resolutionWidth}x${job.resolutionHeight}:rate=${job.fps}`;
+    const pattern = params ? `${basePattern}:${params.replace(/^:+/, '')}` : basePattern;
+    await this.log(runtime.jobId, 'info', 'worker', `test pattern source: ${pattern}`);
+    return {
+      inputArgs: ['-re', '-f', 'lavfi', '-i', pattern],
+      inputEnv: {} as Record<string, string>
+    };
   }
 
   // 指定した子プロセス群の終了を一定時間待機する。
@@ -896,7 +948,12 @@ class JobWorkerService {
       void this.log(runtime.jobId, 'warn', source, `exited code=${code} signal=${signal}`);
       const activeProc = runtime.processes[source];
       if (!runtime.stopping && activeProc === proc) {
-        void this.handleFailure(runtime, `${source} exited unexpectedly`);
+        const recoveryMode: RecoveryMode =
+          source === 'ffmpeg' &&
+          (runtime.currentInputSourceType === 'browser' || runtime.currentInputSourceType === 'ssh_terminal')
+            ? 'output_only'
+            : 'full';
+        void this.handleFailure(runtime, `${source} exited unexpectedly`, recoveryMode);
       }
     });
 
