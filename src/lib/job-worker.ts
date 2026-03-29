@@ -68,6 +68,8 @@ const START_TIMEOUT_FFMPEG_MS = 20_000;
 const URL_SWITCH_TIMEOUT_MS = 10_000;
 const MIN_REFRESH_SEC = 10;
 const DEFAULT_TERMINAL_FONT_SIZE_PX = 14;
+const PROCESS_EXIT_WAIT_MS = 3_000;
+const PROCESS_EXIT_POLL_MS = 100;
 
 // xtermのフォントサイズから概算セル幅を求める。
 function estimateTerminalCellWidth(fontSizePx: number): number {
@@ -266,6 +268,7 @@ class JobWorkerService {
     let inputEnv: Record<string, string> = {};
 
     if (job.inputSourceType === 'browser' || job.inputSourceType === 'ssh_terminal') {
+      await this.cleanupStaleSharedMemory(runtime.jobId, 'before_start');
       runtime.processes.xvfb = this.spawnProcess(
         runtime,
         'xvfb',
@@ -292,9 +295,12 @@ class JobWorkerService {
             `:${runtime.displayNum}`,
             '-rfbport',
             String(runtime.vncPort),
+            '-no6',
             '-forever',
             '-shared',
             '-nopw',
+            '-noshm',
+            '-onetile',
             '-noxdamage',
             '-xkb'
           ],
@@ -463,17 +469,16 @@ class JobWorkerService {
     runtime.cdp = undefined;
     runtime.processes = {};
 
+    const gracefulKill = forceOnly ? 'SIGKILL' : 'SIGTERM';
     for (const proc of procs) {
       try {
-        if (!forceOnly) {
-          proc.kill('SIGTERM');
-        }
+        proc.kill(gracefulKill);
       } catch {
         // ignore
       }
     }
 
-    await this.sleep(300);
+    await this.waitForProcessesExit(procs, PROCESS_EXIT_WAIT_MS);
 
     for (const proc of procs) {
       if (proc.exitCode === null && !proc.killed) {
@@ -483,6 +488,56 @@ class JobWorkerService {
           // ignore
         }
       }
+    }
+
+    await this.waitForProcessesExit(procs, 1_000);
+    await this.cleanupStaleSharedMemory(runtime.jobId, forceOnly ? 'after_force_stop' : 'after_stop');
+  }
+
+  // 指定した子プロセス群の終了を一定時間待機する。
+  private async waitForProcessesExit(procs: ChildProcessWithoutNullStreams[], timeoutMs: number) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (procs.every((proc) => proc.exitCode !== null || proc.killed)) {
+        return;
+      }
+      await this.sleep(PROCESS_EXIT_POLL_MS);
+    }
+  }
+
+  // detach済みのSystem V shared memoryを削除して残骸蓄積を防ぐ。
+  private async cleanupStaleSharedMemory(jobId: bigint, phase: string) {
+    try {
+      const { stdout } = await execFileAsync('ipcs', ['-m'], { encoding: 'utf8' });
+      const staleIds = stdout
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => /^\S+\s+\d+\s+\S+\s+\d+\s+\d+\s+0(?:\s+.*)?$/.test(line))
+        .map((line) => {
+          const cols = line.split(/\s+/);
+          return cols[1];
+        })
+        .filter(Boolean);
+
+      if (!staleIds.length) {
+        return;
+      }
+
+      let removed = 0;
+      for (const shmid of staleIds) {
+        try {
+          await execFileAsync('ipcrm', ['-m', shmid]);
+          removed += 1;
+        } catch {
+          // ignore removal races
+        }
+      }
+
+      if (removed > 0) {
+        await this.log(jobId, 'info', 'worker', `shared memory cleanup (${phase}): removed ${removed} stale segment(s)`);
+      }
+    } catch (err) {
+      await this.log(jobId, 'warn', 'worker', `shared memory cleanup (${phase}) skipped: ${String(err)}`);
     }
   }
 
